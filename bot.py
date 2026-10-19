@@ -31,7 +31,6 @@ DAILY_FREE_LIMIT = 5
 
 # ================= Стани для генерації =================
 class PhotoGenerationState(StatesGroup):
-    waiting_for_mode = State()
     waiting_for_text = State()
     waiting_for_photo = State()
 
@@ -244,7 +243,7 @@ async def cmd_start(message: Message):
         f"Привіт, {message.from_user.first_name}! 👋\n\n"
         f"🤖 Ласкаво просимо до **MarketPhoto AI**!\n"
         f"🎁 Вам доступно **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
-        f"Обирайте стиль чи тисніть «⚙️ Послуги / Функції»."
+        f"Обирайте режим або тисніть «⚙️ Послуги / Функції»."
     )
     await message.answer(text, reply_markup=main_keyboard(), parse_mode="Markdown")
 
@@ -285,7 +284,7 @@ async def cmd_profile(message: Message):
 async def cmd_choose_service(message: Message, state: FSMContext):
     await message.answer(
         "🚀 **Оберіть режим створення:**\n\n"
-        "1️⃣ **З нуля за описом (Text-to-Image)** — ви пишете текст, бот створює картинку.\n"
+        "1️⃣ **З нуля за описом (Text-to-Image)** — ви пишете текст, нейромережа малює за вашим запитом.\n"
         "2️⃣ **Обробка фото** — надішліть свою світлину для стилізації.",
         reply_markup=generation_mode_keyboard(),
         parse_mode="Markdown",
@@ -328,27 +327,27 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
     if gen_mode == "text":
         await state.set_state(PhotoGenerationState.waiting_for_text)
         await callback.message.edit_text(
-            f"🎯 Обрано категорію: **{selected_name}**\n\n"
-            f"✏️ Напишіть текстом, що саме ви хочете згенерувати (наприклад: _«Кіберпанк кіт у неонових окулярах»_):",
+            f"🎯 Обрано стиль: **{selected_name}**\n\n"
+            f"✏️ Напишіть текстом, що саме ви хочете згенерувати (наприклад: _«Рік і Морті в космосі»_):",
             parse_mode="Markdown",
         )
     else:
         await state.set_state(PhotoGenerationState.waiting_for_photo)
         await callback.message.edit_text(
             f"🎯 Обрано стиль: **{selected_name}**\n\n"
-            f"📸 Надішліть ваші фотографію сюди в чат:",
+            f"📸 Надішліть вашу фотографію сюди в чат:",
             parse_mode="Markdown",
         )
     await callback.answer()
 
 
-# ================= Функція Анімації Відсотків =================
+# ================= Анімація прогресу =================
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск генерації...**\n░░░░░░░░░░ **0%** ⚙️ *Підготовка...*", 0.8),
-        ("🎨 **Створення зображення...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Малюємо деталі...*", 1.0),
-        ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Застосовуємо стиль...*", 1.0),
-        ("🎉 **Фінальна обробка!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Майже готово!*", 0.7),
+        ("🚀 **Аналізуємо ваш запит...**\n░░░░░░░░░░ **0%** ⚙️ *Підготовка нейромережі...*", 0.6),
+        ("🎨 **Генеруємо зображення...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Малюємо деталі...*", 0.8),
+        ("✨ **Штучний інтелект працює...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Додаємо стиль...*", 0.8),
+        ("🎉 **Фінальна обробка!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Готово!*", 0.5),
     ]
 
     for text, delay in stages:
@@ -362,7 +361,7 @@ async def animate_progress(status_msg: Message, style_name: str):
             pass
 
 
-# ================= Генерація з нуля (За текстом) =================
+# ================= Генерація за текстом (Pollinations AI) =================
 @dp.message(PhotoGenerationState.waiting_for_text)
 async def process_text_generation(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -380,11 +379,14 @@ async def process_text_generation(message: Message, state: FSMContext):
     state_data = await state.get_data()
     style_name = state_data.get("photo_type", "Загальний стиль")
 
-    status_msg = await message.answer("🚀 Починаємо генерацію...")
+    status_msg = await message.answer("🚀 Починаємо генерацію за вашим запитом...")
     await animate_progress(status_msg, style_name)
 
-    # Приклад заглушки зображення (у реальному боті тут виклики API)
-    photo_url = "https://picsum.photos/800/800"
+    # Формуємо запит до безкоштовного генератора зображень Pollinations AI на основі введеного тексту
+    import urllib.parse
+    full_prompt = f"{prompt_text}, high quality, {style_name}"
+    encoded_prompt = urllib.parse.quote(full_prompt)
+    ai_image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
 
     try:
         await status_msg.delete()
@@ -392,12 +394,12 @@ async def process_text_generation(message: Message, state: FSMContext):
         pass
 
     await message.answer_photo(
-        photo=photo_url,
+        photo=ai_image_url,
         caption=(
-            f"✨ **Ваше фото готове!**\n"
+            f"✨ **Згенеровано за вашим запитом!**\n"
             f"🎨 Стиль: _{style_name}_\n"
-            f"📝 Опис: _{prompt_text}_\n\n"
-            f"Якщо якість вам не сподобалася, натисніть кнопку нижче:"
+            f"📝 Ваш запит: _{prompt_text}_\n\n"
+            f"Якщо якість вас не влаштувала, натисніть кнопку нижче:"
         ),
         reply_markup=user_result_keyboard(),
         parse_mode="Markdown",
@@ -405,7 +407,7 @@ async def process_text_generation(message: Message, state: FSMContext):
     await state.clear()
 
 
-# ================= Обробка наданого фото =================
+# ================= Обробка фото =================
 @dp.message(PhotoGenerationState.waiting_for_photo, F.photo)
 async def process_photo_style(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -422,7 +424,7 @@ async def process_photo_style(message: Message, state: FSMContext):
     state_data = await state.get_data()
     style_name = state_data.get("photo_type", "Загальний стиль")
 
-    status_msg = await message.answer("🚀 Починаємо обробку фото...")
+    status_msg = await message.answer("🚀 Обробляємо ваше фото...")
     await animate_progress(status_msg, style_name)
 
     photo_file_id = message.photo[-1].file_id
@@ -474,7 +476,7 @@ async def process_user_defect_report(callback: types.CallbackQuery):
 
     try:
         caption_text = (
-            f"⚠️ **Скарги на брак від користувача!**\n\n"
+            f"⚠️ **Скарга на брак від користувача!**\n\n"
             f"👤 Користувач: @{callback.from_user.username or 'немає'} (ID: `{user_id}`)\n"
             f"Перевірте фото та поверніть спробу за потреби:"
         )
@@ -640,8 +642,8 @@ async def cmd_help(message: Message):
     await message.answer(
         "ℹ️ **Довідка:**\n\n"
         f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
-        "• Можна генерувати зображення з нуля за текстовим описом або стилізувати власні фото.\n"
-        "• У разі бракованого результату скористайтеся кнопкою **«⚠️ Брак»** для компенсації.",
+        "• Бот повністю розуміє будь-які ваші текстові запити та малює зображення за допомогою ШІ.\n"
+        "• У разі бракованого результату скористайтеся кнопкою **«⚠️ Брак»** під фото.",
         parse_mode="Markdown",
     )
 
