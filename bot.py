@@ -14,8 +14,8 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
-# 📌 Ваш теперішній головний ID (адміністратор, куди прилітають заявки)
-ADMIN_ID = 7175671201
+# 📌 Ваш головний адмін-акаунт (куди надходять заявки на перевірку)
+ADMIN_ID = 5694967765
 
 # 📌 Ваш номер картки для оплати
 CARD_NUMBER = "4874 0700 7067 8378"
@@ -64,7 +64,7 @@ def add_credits_to_user(user_id, amount):
 
   db[str_id]["credits"] += amount
   save_db(db)
-  print(f"✅ Успішно додано {amount} кредитів для {user_id}. Новий баланс: {db[str_id]['credits']}")
+  print(f"✅ Успішно додано {amount} кредитів для користувача {user_id}. Баланс: {db[str_id]['credits']}")
 
 
 def set_user_pro_status(user_id, is_pro=True):
@@ -79,7 +79,7 @@ def set_user_pro_status(user_id, is_pro=True):
   if is_pro:
     db[str_id]["credits"] = 9999
   save_db(db)
-  print(f"✅ Статус PRO встановлено для {user_id}")
+  print(f"✅ PRO статус встановлено для користувача {user_id}")
 
 
 # Словник для швидкого перекладу
@@ -135,7 +135,7 @@ def get_universal_prompt(user_text, style="standard"):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Fixed Payments) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -271,6 +271,7 @@ def callback_claim_payment(call):
       parse_mode="Markdown",
   )
 
+  # Формуємо кнопки для адміна, куди чітко зашиваємо ID того, хто купив (user_id)
   admin_markup = types.InlineKeyboardMarkup()
   admin_markup.add(
       types.InlineKeyboardButton(
@@ -286,13 +287,13 @@ def callback_claim_payment(call):
         ADMIN_ID,
         "💰 **НОВА ЗАЯВКА НА ОПЛАТУ!**\n\n"
         f"👤 Користувач: {username}\n"
-        f"🆔 ID: `{user_id}`\n"
+        f"🆔 ID покупця: `{user_id}`\n"
         f"📦 Товар: **{pack_name}**\n\n"
         "Перевірте свій додаток банку і натисніть кнопку нижче:",
         reply_markup=admin_markup,
         parse_mode="Markdown",
     )
-    print(f"🔔 Адміну ({ADMIN_ID}) надіслано заявку від користувача {user_id}")
+    print(f"🔔 Заявку від клієнта {user_id} успішно надіслано адміну ({ADMIN_ID})")
   except Exception as e:
     print(f"❌ Помилка надсилання сповіщення адміну: {e}")
 
@@ -301,6 +302,7 @@ def callback_claim_payment(call):
     func=lambda call: call.data.startswith("appr_") or call.data.startswith("decl_")
 )
 def callback_admin_action(call):
+  # Перевіряємо, чи на кнопку тисне саме адміністратор (ADMIN_ID)
   if call.from_user.id != ADMIN_ID:
     bot.answer_callback_query(call.id, "❌ Ви не адміністратор!", show_alert=True)
     return
@@ -310,7 +312,7 @@ def callback_admin_action(call):
 
   if action == "appr":
     pack_type = parts[1]
-    target_user_id = int(parts[2])
+    target_user_id = int(parts[3])  # Отримуємо реальний ID покупця з кнопки
 
     if pack_type == "claim_50":
       add_credits_to_user(target_user_id, 50)
@@ -319,15 +321,15 @@ def callback_admin_action(call):
       set_user_pro_status(target_user_id, True)
       msg_text = "⭐ **Вашу оплату підтверджено!** PRO-підписку активовано. 🚀"
 
-    # Надсилаємо клієнту сповіщення про успіх
+    # Надсилаємо покупцю сповіщення в його чат
     try:
       bot.send_message(target_user_id, msg_text, parse_mode="Markdown")
-      print(f"✅ Повідомлення успішно доставлено покупцю {target_user_id}")
+      print(f"✅ Повідомлення про успіх доставлено покупцю {target_user_id}")
     except Exception as e:
       print(f"❌ Не вдалось надіслати повідомлення покупцю {target_user_id}: {e}")
 
     bot.edit_message_text(
-        f"✅ **УСПІШНО ПІДТВЕРДЖЕНО** для ID `{target_user_id}`!",
+        f"✅ **УСПІШНО ПІДТВЕРДЖЕНО** для покупця з ID `{target_user_id}`!",
         call.message.chat.id,
         call.message.message_id,
         parse_mode="Markdown",
@@ -345,7 +347,7 @@ def callback_admin_action(call):
       pass
 
     bot.edit_message_text(
-        f"❌ **ВІДХИЛЕНО** для ID `{target_user_id}`.",
+        f"❌ **ВІДХИЛЕНО** для покупця з ID `{target_user_id}`.",
         call.message.chat.id,
         call.message.message_id,
         parse_mode="Markdown",
