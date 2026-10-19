@@ -5,6 +5,7 @@ from flask import Flask
 import requests
 import telebot
 
+# Веб-сервер Flask для підтримки роботи на Render 24/7
 app = Flask("")
 
 
@@ -13,8 +14,25 @@ def home():
   return "MarketPhoto AI Bot is running 24/7! 🚀"
 
 
+# Ваш токен бота від BotFather
 TOKEN = "8616836203:AAHnB70MrjS6275-bH4ON8_NR1tVGb4gm0E"
+
 bot = telebot.TeleBot(TOKEN)
+
+
+# Функція автоматичного перекладу українського опису на англійську для якісної генерації Flux
+def translate_to_english(ukr_text):
+  try:
+    url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(ukr_text)}&langpair=uk|en"
+    response = requests.get(url, timeout=5)
+    if response.status_code == 200:
+      data = response.json()
+      translated = data.get("responseData", {}).get("translatedText", "")
+      if translated and not translated.startswith("MYMEMORY"):
+        return translated
+  except Exception as e:
+    print(f"Помилка перекладу: {e}")
+  return ukr_text
 
 
 @bot.message_handler(commands=["start"])
@@ -23,7 +41,8 @@ def send_welcome(message):
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
       "✨ Я твій професійний AI-генератор студійних фото товарів преміум-якості!\n\n"
-      "💬 Напиши мені опис товару, і я згенерую фото каталожної якості! 🚀",
+      "💬 Напиши мені опис товару (наприклад: *годинник* або *кросівки*), і я"
+      " згенерую фото каталожної якості! 🚀",
   )
 
 
@@ -31,7 +50,8 @@ def send_welcome(message):
 def cmd_generate(message):
   bot.reply_to(
       message,
-      "🎨 **Режим преміум-генерації!**\n\nОпишіть товар якомога детальніше! 📸✨",
+      "🎨 **Режим преміум-генерації!**\n\nОпишіть товар якомога детальніше!"
+      " 📸✨",
   )
 
 
@@ -47,8 +67,14 @@ def handle_message(message):
   )
 
   user_text = message.text
+
+  # Перекладаємо опис на англійську мову, щоб Flux розумів його ідеально
+  translated_desc = translate_to_english(user_text)
+  print(f"Перекладений промпт: {translated_desc}")
+
+  # Формуємо професійний студійний промпт
   image_prompt = (
-      f"Professional commercial product photography of {user_text}, studio"
+      f"Professional commercial product photography of {translated_desc}, studio"
       " softbox lighting, sharp focus, hyper-realistic textures, clean"
       " isolated pure seamless white background, 8k resolution, e-commerce"
       " catalog style"
@@ -58,7 +84,7 @@ def handle_message(message):
     encoded_prompt = urllib.parse.quote(image_prompt)
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
 
-    img_response = requests.get(image_url, timeout=90)
+    img_response = requests.get(image_url, timeout=120)
 
     if img_response.status_code == 200:
       photo_file = io.BytesIO(img_response.content)
@@ -99,7 +125,6 @@ def handle_message(message):
 
 def run_bot():
   print("Бот запускається без конфліктів...")
-  # Видаляємо вебхуки та скидаємо старі сесії перед опитуванням
   bot.remove_webhook()
   bot.infinity_polling(skip_pending=True)
 
