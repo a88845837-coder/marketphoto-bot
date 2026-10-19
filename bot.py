@@ -245,7 +245,7 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
 
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі Flux...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка промту...*", 0.3),
+        ("🚀 **Запуск нейромережі...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка промту...*", 0.3),
         ("🎨 **Рендеринг високої деталізації...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення текстури...*", 0.4),
         ("✨ **Штучний інтелект покращує світло...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна полірування...*", 0.4),
         ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження ультра-якості...*", 0.2),
@@ -274,18 +274,19 @@ async def process_text_gen(message: Message, state: FSMContext):
     data = await state.get_data()
     s_name = data.get("photo_type", "Стиль")
 
-    status_msg = await message.answer("🚀 Починаємо створення ультра-якості...")
+    status_msg = await message.answer("🚀 Починаємо створення...")
     await animate_progress(status_msg, s_name)
 
     prompt = enhance_prompt(message.text, s_name)
     seed = int(time.time() * 1000) % 100000
-    # Використовуємо стабільну базову модель flux з унікальним seed та nologo=true
-    api_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux&seed={seed}&nologo=true"
+    
+    # Використовуємо стабільну модель turbo без водяного знака з унікальним seed
+    api_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=turbo&seed={seed}&nologo=true"
 
     image_bytes = None
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=35) as resp:
+            async with session.get(api_url, timeout=40) as resp:
                 if resp.status == 200:
                     image_bytes = await resp.read()
     except Exception as e:
@@ -301,12 +302,12 @@ async def process_text_gen(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    photo_file = BufferedInputFile(image_bytes, filename="hd_generated.png")
+    photo_file = BufferedInputFile(image_bytes, filename="generated.png")
 
     try:
         await message.answer_photo(
             photo=photo_file,
-            caption=f"✨ **Згенеровано в ультра-якості!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
+            caption=f"✨ **Згенеровано за вашим запитом!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
             reply_markup=user_result_keyboard(),
             parse_mode="Markdown",
         )
