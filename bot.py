@@ -105,10 +105,11 @@ def use_generation(user_id: int):
 def enhance_prompt(user_prompt: str, style: str) -> str:
     p = user_prompt.strip().lower()
     
-    # Словник для точного розуміння українських запитів
     dictionary = {
-        "полуниця": "fresh juicy red strawberry, macro shot, photorealistic, 4k",
+        "полуниця": "fresh juicy red strawberry on a green leaf, macro shot, photorealistic, 4k",
         "полуниці": "fresh juicy red strawberries, macro shot, photorealistic, 4k",
+        "хмаринка": "soft fluffy white clouds in a bright blue sky, scenic, 4k",
+        "хмари": "soft fluffy white clouds in a bright blue sky, scenic, 4k",
         "банани": "bunch of fresh yellow bananas on a table, realistic, 4k",
         "банан": "fresh yellow banana, realistic",
         "бетмен": "Batman superhero dark knight, cinematic lighting, highly detailed",
@@ -130,7 +131,7 @@ def enhance_prompt(user_prompt: str, style: str) -> str:
             break
 
     if style == "Стильна Аватарка":
-        if any(w in p for w in ["полуниц", "банан", "авто", "бмв", "машина", "космос", "кіт", "собака", "бетмен"]):
+        if any(w in p for w in ["полуниц", "хмарин", "банан", "авто", "бмв", "машина", "космос", "кіт", "собака", "бетмен"]):
             extra = "high quality, masterpiece, vivid colors, centered"
         else:
             extra = "high quality, detailed portrait, masterpiece, centered composition"
@@ -242,13 +243,12 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ================= Анімація прогресу генерації =================
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі Microsoft / DALL-E...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.4),
-        ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення деталей...*", 0.5),
-        ("✨ **Покращення якості та кольорів...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна обробка...*", 0.5),
-        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Відправляємо результат...*", 0.3),
+        ("🚀 **Запуск нейромережі...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
+        ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення деталей...*", 0.4),
+        ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна обробка...*", 0.4),
+        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Відправляємо результат...*", 0.2),
     ]
 
     for text, delay in stages:
@@ -274,7 +274,6 @@ async def process_text_gen(message: Message, state: FSMContext):
     data = await state.get_data()
     s_name = data.get("photo_type", "Стиль")
 
-    # Повернена анімація процесу
     status_msg = await message.answer("🚀 Починаємо створення...")
     await animate_progress(status_msg, s_name)
 
@@ -286,12 +285,16 @@ async def process_text_gen(message: Message, state: FSMContext):
     except Exception:
         pass
 
-    await message.answer_photo(
-        photo=url,
-        caption=f"✨ **Згенеровано за вашим запитом!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
-        reply_markup=user_result_keyboard(),
-        parse_mode="Markdown",
-    )
+    try:
+        await message.answer_photo(
+            photo=url,
+            caption=f"✨ **Згенеровано за вашим запитом!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
+            reply_markup=user_result_keyboard(),
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        await message.answer(f"❌ Помилка надсилання фото: {e}. Спробуйте ще раз.")
+        
     await state.clear()
 
 
@@ -374,3 +377,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
