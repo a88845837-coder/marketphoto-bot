@@ -14,7 +14,8 @@ def home():
   return "MarketPhoto AI Bot is running 24/7! 🚀"
 
 
-TOKEN = "8616836203:AAGkRFDiPqI2QUahx45iDBm7NyqbPwbv1wA"
+# Ваш новий токен від BotFather
+TOKEN = "8616836203:AAHnB70MrjS6275-bH4ON8_NR1tVGb4gm0E"
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -100,7 +101,7 @@ def handle_message(message):
 
 
 def run_bot():
-  print("Бот запускається та підключається до Telegram...")
+  print("Бот запускається...")
   bot.infinity_polling(skip_pending=True)
 
 
