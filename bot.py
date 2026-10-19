@@ -1,10 +1,10 @@
 import asyncio
-import datetime
-import json
-import os
-import time
-import urllib.parse
-from aiohttp import web
+datetime = __import__('datetime')
+json = __import__('json')
+os = __import__('os')
+time = __import__('time')
+urllib = __import__('urllib.parse', fromlist=['quote'])
+aiohttp = __import__('aiohttp')
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -19,7 +19,6 @@ from aiogram.types import (
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
 )
-import aiohttp
 
 BOT_TOKEN = "8616836203:AAGImAKF-vFvJOQ0Qo1VSQ8mZFoPJ8nkzLs"
 ADMIN_ID = 5694967765
@@ -108,23 +107,23 @@ def enhance_prompt(user_prompt: str, style: str) -> str:
     p = user_prompt.strip().lower()
     
     dictionary = {
-        "губка боб": "SpongeBob SquarePants cartoon character, vibrant colors, digital art",
-        "губка боб квадратні штани": "SpongeBob SquarePants cartoon character, vibrant colors",
-        "полуниця": "fresh juicy red strawberry on a green leaf, macro shot, photorealistic, 4k",
-        "полуниці": "fresh juicy red strawberries, macro shot, photorealistic, 4k",
-        "хмаринка": "soft fluffy white clouds in a bright blue sky, scenic, 4k",
-        "банани": "bunch of fresh yellow bananas on a table, realistic, 4k",
-        "банан": "fresh yellow banana, realistic",
-        "бетмен": "Batman superhero dark knight, cinematic lighting, highly detailed",
-        "людина-павук": "Spider-Man superhero dynamic action pose",
-        "людина павук": "Spider-Man superhero dynamic action pose",
-        "рік і морті": "Rick and Morty cartoon style, 2D animation",
-        "бмв": "luxury BMW car, cinematic lighting, road",
-        "автомобіль": "modern luxury car, street background",
-        "кіберпанк": "cyberpunk city, neon lights, futuristic",
-        "кіт": "cute fluffy cat, detailed fur",
-        "собака": "cute happy dog",
-        "космос": "outer space, colorful nebula, stars",
+        "губка боб": "SpongeBob SquarePants 3D Pixar style character, high detail, vibrant colors, masterpiece",
+        "губка боб квадратні штани": "SpongeBob SquarePants 3D Pixar style character, high detail",
+        "полуниця": "fresh juicy red strawberry on a green leaf, macro photography, photorealistic, 8k",
+        "полуниці": "fresh juicy red strawberries, macro photography, photorealistic, 8k",
+        "хмаринка": "soft fluffy white clouds in a bright blue sky, cinematic lighting, 8k",
+        "банани": "bunch of fresh yellow bananas on a rustic wooden table, photorealistic, 8k",
+        "банан": "fresh single yellow banana, photorealistic, studio lighting",
+        "бетмен": "Batman superhero dark knight, hyperrealistic, cinematic dramatic lighting, 8k",
+        "людина-павук": "Spider-Man superhero dynamic action pose, highly detailed digital art",
+        "людина павук": "Spider-Man superhero dynamic action pose, highly detailed digital art",
+        "рік і морті": "Rick and Morty high quality 3D render style",
+        "бмв": "luxury modern BMW car on a night city street, photorealistic, 8k",
+        "автомобіль": "modern luxury car, street background, photorealistic",
+        "кіберпанк": "cyberpunk futuristic city, neon lights, highly detailed, 8k",
+        "кіт": "cute fluffy cat with bright expressive eyes, macro detail, photorealistic",
+        "собака": "cute happy dog, high detail, professional photography",
+        "космос": "deep outer space, colorful nebula, glowing stars, 8k resolution",
     }
 
     translated = user_prompt
@@ -134,11 +133,11 @@ def enhance_prompt(user_prompt: str, style: str) -> str:
             break
 
     if style == "Стильна Аватарка":
-        extra = "high quality, masterpiece, vivid colors, centered composition"
+        extra = "masterpiece, sharp focus, professional digital art, 8k"
     elif style == "Заставка / Шпалери":
-        extra = "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting"
+        extra = "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting, masterpiece"
     else:
-        extra = "digital art illustration, artistic style, masterpiece"
+        extra = "stunning visual art, highly detailed, professional render"
 
     return f"{translated}, {extra}"
 
@@ -245,10 +244,10 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
 
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск чистої нейромережі...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
-        ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення деталей...*", 0.4),
-        ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна обробка...*", 0.4),
-        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження файлу...*", 0.2),
+        ("🚀 **Запуск нейромережі Flux 8K...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка промту...*", 0.3),
+        ("🎨 **Рендеринг високої деталізації...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення текстури...*", 0.4),
+        ("✨ **Штучний інтелект покращує світло...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна полірування...*", 0.4),
+        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження ультра-якості...*", 0.2),
     ]
 
     for text, delay in stages:
@@ -274,22 +273,22 @@ async def process_text_gen(message: Message, state: FSMContext):
     data = await state.get_data()
     s_name = data.get("photo_type", "Стиль")
 
-    status_msg = await message.answer("🚀 Починаємо створення...")
+    status_msg = await message.answer("🚀 Починаємо створення ультра-якості...")
     await animate_progress(status_msg, s_name)
 
     prompt = enhance_prompt(message.text, s_name)
-    # Використовуємо модель turbo без водяного знака та з параметром nologo=true
-    seed = int(time.time() * 1000) % 100000
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=turbo&seed={seed}&nologo=true"
+    
+    # Використовуємо стабільний безкоштовний високоякісний ендпоінт без водяних знаків
+    api_url = "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt) + "?width=1024&height=1024&model=flux-realism&nologo=true"
 
     image_bytes = None
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
+            async with session.get(api_url, timeout=30) as resp:
                 if resp.status == 200:
                     image_bytes = await resp.read()
     except Exception as e:
-        print(f"Помилка завантаження картинки: {e}")
+        print(f"Помилка завантаження: {e}")
 
     try:
         await status_msg.delete()
@@ -297,16 +296,16 @@ async def process_text_gen(message: Message, state: FSMContext):
         pass
 
     if not image_bytes:
-        await message.answer("❌ Не вдалося завантажити зображення від нейромережі. Спробуйте ще раз.")
+        await message.answer("❌ Не вдалося згенерувати зображення. Спробуйте ще раз.")
         await state.clear()
         return
 
-    photo_file = BufferedInputFile(image_bytes, filename="generated.png")
+    photo_file = BufferedInputFile(image_bytes, filename="hd_generated.png")
 
     try:
         await message.answer_photo(
             photo=photo_file,
-            caption=f"✨ **Згенеровано за вашим запитом!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
+            caption=f"✨ **Ультра-якість (Без водяних знаків)!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
             reply_markup=user_result_keyboard(),
             parse_mode="Markdown",
         )
