@@ -14,8 +14,8 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
-# 📌 Ваш актуальний Telegram ID адміністратора (з якого ви підтверджуєте оплати)
-ADMIN_ID = 7175671201
+# 📌 Повернено ваш початковий ADMIN_ID
+ADMIN_ID = 5694967765
 
 # 📌 Ваш номер картки для оплати
 CARD_NUMBER = "4874 0700 7067 8378"
@@ -64,7 +64,7 @@ def add_credits_to_user(user_id, amount):
 
   db[str_id]["credits"] += amount
   save_db(db)
-  print(f"✅ Успішно додано {amount} кредитів для {user_id}. Баланс: {db[str_id]['credits']}")
+  print(f"✅ Додано {amount} кредитів для {user_id}. Баланс: {db[str_id]['credits']}")
 
 
 def set_user_pro_status(user_id, is_pro=True):
@@ -79,7 +79,7 @@ def set_user_pro_status(user_id, is_pro=True):
   if is_pro:
     db[str_id]["credits"] = 9999
   save_db(db)
-  print(f"✅ Статус PRO встановлено для {user_id}")
+  print(f"✅ PRO встановлено для {user_id}")
 
 
 # Словник для швидкого перекладу
@@ -135,7 +135,7 @@ def get_universal_prompt(user_text, style="standard"):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Admin Fixed) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -292,7 +292,6 @@ def callback_claim_payment(call):
         reply_markup=admin_markup,
         parse_mode="Markdown",
     )
-    print(f"🔔 Адміну ({ADMIN_ID}) надіслано заявку від користувача {user_id}")
   except Exception as e:
     print(f"❌ Помилка надсилання сповіщення адміну: {e}")
 
@@ -321,7 +320,6 @@ def callback_admin_action(call):
 
     try:
       bot.send_message(target_user_id, msg_text, parse_mode="Markdown")
-      print(f"✅ Повідомлення доставлено користувачу {target_user_id}")
     except Exception as e:
       print(f"❌ Не вдалось надіслати повідомлення покупцю {target_user_id}: {e}")
 
