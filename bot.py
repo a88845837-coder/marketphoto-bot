@@ -29,8 +29,10 @@ DB_FILE = "users_db.json"
 DAILY_FREE_LIMIT = 5
 
 
-# ================= Стан для вибору виду фото =================
+# ================= Стани для генерації =================
 class PhotoGenerationState(StatesGroup):
+    waiting_for_mode = State()
+    waiting_for_text = State()
     waiting_for_photo = State()
 
 
@@ -156,6 +158,23 @@ def main_keyboard():
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
+def generation_mode_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✨ Генерація з нуля (Текст ➔ Фото)", callback_data="gen_text"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📸 Обробка власного фото", callback_data="gen_photo"
+                )
+            ],
+        ]
+    )
+
+
 def photo_type_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -223,9 +242,9 @@ async def cmd_start(message: Message):
     get_user_data(message.from_user.id)
     text = (
         f"Привіт, {message.from_user.first_name}! 👋\n\n"
-        f"🤖 Ласкаво просимо до бота!\n"
-        f"🎁 Кожен день вам доступно **{DAILY_FREE_LIMIT} безкоштовних генерацій**.\n"
-        f"Обирайте стиль або тисніть «⚙️ Послуги / Функції»."
+        f"🤖 Ласкаво просимо до **MarketPhoto AI**!\n"
+        f"🎁 Вам доступно **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
+        f"Обирайте стиль чи тисніть «⚙️ Послуги / Функції»."
     )
     await message.answer(text, reply_markup=main_keyboard(), parse_mode="Markdown")
 
@@ -260,19 +279,36 @@ async def cmd_profile(message: Message):
     await message.answer(profile_text, parse_mode="Markdown")
 
 
-# Виправлений виклику меню послуг для будь-якої назви кнопки
 @dp.message(F.text == "⚙️ Послуги / Функції")
 @dp.message(F.text == "🎨 Створити фото")
 @dp.message(F.text == "⚙️ Послуги")
-async def cmd_choose_type(message: Message):
+async def cmd_choose_service(message: Message, state: FSMContext):
     await message.answer(
-        "📸 **Оберіть вид генерації:**\n\n"
-        "1️⃣ **Стильна Аватарка** — ідеальні пропорції та чітке обличчя.\n"
-        "2️⃣ **Заставка / Шпалери** — висока деталізація для телефону чи ПК.\n"
-        "3️⃣ **Художнє фото** — креативний арт-стиль.",
-        reply_markup=photo_type_keyboard(),
+        "🚀 **Оберіть режим створення:**\n\n"
+        "1️⃣ **З нуля за описом (Text-to-Image)** — ви пишете текст, бот створює картинку.\n"
+        "2️⃣ **Обробка фото** — надішліть свою світлину для стилізації.",
+        reply_markup=generation_mode_keyboard(),
         parse_mode="Markdown",
     )
+
+
+@dp.callback_query(F.data.in_(["gen_text", "gen_photo"]))
+async def process_gen_mode(callback: types.CallbackQuery, state: FSMContext):
+    if callback.data == "gen_text":
+        await state.update_data(gen_mode="text")
+        await callback.message.edit_text(
+            "🎨 **Оберіть категорію для генерації з нуля:**",
+            reply_markup=photo_type_keyboard(),
+            parse_mode="Markdown",
+        )
+    else:
+        await state.update_data(gen_mode="photo")
+        await callback.message.edit_text(
+            "📸 **Оберіть стиль для обробки вашої фотографії:**",
+            reply_markup=photo_type_keyboard(),
+            parse_mode="Markdown",
+        )
+    await callback.answer()
 
 
 @dp.callback_query(F.data.startswith("type_"))
@@ -283,80 +319,133 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
         "wallpaper": "Заставка / Шпалери",
         "art": "Художнє фото",
     }
-    selected_name = type_names.get(photo_type, "Стандартне фото")
+    selected_name = type_names.get(photo_type, "Стандартний стиль")
     await state.update_data(photo_type=selected_name)
-    await state.set_state(PhotoGenerationState.waiting_for_photo)
 
-    await callback.message.edit_text(
-        f"🎯 Обрано стиль: **{selected_name}**\n\n"
-        f"Тепер надішліть фотографію сюди в чат:",
-        parse_mode="Markdown",
-    )
+    state_data = await state.get_data()
+    gen_mode = state_data.get("gen_mode", "text")
+
+    if gen_mode == "text":
+        await state.set_state(PhotoGenerationState.waiting_for_text)
+        await callback.message.edit_text(
+            f"🎯 Обрано категорію: **{selected_name}**\n\n"
+            f"✏️ Напишіть текстом, що саме ви хочете згенерувати (наприклад: _«Кіберпанк кіт у неонових окулярах»_):",
+            parse_mode="Markdown",
+        )
+    else:
+        await state.set_state(PhotoGenerationState.waiting_for_photo)
+        await callback.message.edit_text(
+            f"🎯 Обрано стиль: **{selected_name}**\n\n"
+            f"📸 Надішліть ваші фотографію сюди в чат:",
+            parse_mode="Markdown",
+        )
     await callback.answer()
 
 
-@dp.message(Command("shop", "buy"))
-@dp.message(F.text == "🛒 Магазин зірок")
-async def cmd_shop(message: Message):
-    await message.answer(
-        "🛒 **Магазин покупок за Telegram Stars (XTR)**\n\n"
-        "Оберіть потрібний пакет. Оплата проходить миттєво й безпечно:",
-        reply_markup=shop_keyboard(),
-        parse_mode="Markdown",
-    )
+# ================= Функція Анімації Відсотків =================
+async def animate_progress(status_msg: Message, style_name: str):
+    stages = [
+        ("🚀 **Запуск генерації...**\n░░░░░░░░░░ **0%** ⚙️ *Підготовка...*", 0.8),
+        ("🎨 **Створення зображення...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Малюємо деталі...*", 1.0),
+        ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Застосовуємо стиль...*", 1.0),
+        ("🎉 **Фінальна обробка!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Майже готово!*", 0.7),
+    ]
+
+    for text, delay in stages:
+        try:
+            await status_msg.edit_text(
+                f"🎨 Стиль: **{style_name}**\n\n{text}",
+                parse_mode="Markdown",
+            )
+            await asyncio.sleep(delay)
+        except Exception:
+            pass
 
 
-@dp.message(F.text == "ℹ️ Допомога")
-async def cmd_help(message: Message):
-    await message.answer(
-        "ℹ️ **Довідка:**\n\n"
-        f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
-        "• Можна вибирати між стилями: Аватарка, Заставка, Художнє фото.\n"
-        "• Якщо згенероване фото виявилось некоректним, натисніть кнопку **«⚠️ Брак»** під фото — адміністратор розгляне заявку та поверне спробу.",
-        parse_mode="Markdown",
-    )
-
-
-# ================= Обробка фото =================
-
-@dp.message(F.photo)
-async def process_user_photo(message: Message, state: FSMContext):
+# ================= Генерація з нуля (За текстом) =================
+@dp.message(PhotoGenerationState.waiting_for_text)
+async def process_text_generation(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    state_data = await state.get_data()
-    style_name = state_data.get("photo_type", "Загальний стиль")
+    prompt_text = message.text
 
     success, source_type, remainder = use_generation(user_id)
-
     if not success:
         await message.answer(
             "❌ У вас закінчилися як безкоштовні спроби на сьогодні, так і кредити!\n"
-            "Поповніть баланс у меню «🛒 Магазин зірок» або зачекайте до завтра."
+            "Поповніть баланс у «🛒 Магазин зірок» або зачекайте до завтра."
         )
+        await state.clear()
         return
 
-    if source_type == "admin":
-        info_text = "👑 [Адмін-режим: безліміт]"
-    elif source_type == "free":
-        info_text = f"🎁 Безкоштовна спроба (залишилось на сьогодні: {remainder})"
-    else:
-        info_text = f"💎 Витрачено 1 кредит (залишок: {remainder})"
+    state_data = await state.get_data()
+    style_name = state_data.get("photo_type", "Загальний стиль")
 
-    photo_file_id = message.photo[-1].file_id
+    status_msg = await message.answer("🚀 Починаємо генерацію...")
+    await animate_progress(status_msg, style_name)
 
-    await message.answer(f"📸 Ваше фото обробляється ({style_name})...\n{info_text}")
+    # Приклад заглушки зображення (у реальному боті тут виклики API)
+    photo_url = "https://picsum.photos/800/800"
+
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
 
     await message.answer_photo(
-        photo_file_id,
-        caption=f"✨ **Готово!** Стиль: _{style_name}_\n\nЯкщо результатом незадоволені, натисніть кнопку нижче:",
+        photo=photo_url,
+        caption=(
+            f"✨ **Ваше фото готове!**\n"
+            f"🎨 Стиль: _{style_name}_\n"
+            f"📝 Опис: _{prompt_text}_\n\n"
+            f"Якщо якість вам не сподобалася, натисніть кнопку нижче:"
+        ),
         reply_markup=user_result_keyboard(),
         parse_mode="Markdown",
     )
-
     await state.clear()
 
 
-# ================= Повідомлення про Брак від юзера =================
+# ================= Обробка наданого фото =================
+@dp.message(PhotoGenerationState.waiting_for_photo, F.photo)
+async def process_photo_style(message: Message, state: FSMContext):
+    user_id = message.from_user.id
 
+    success, source_type, remainder = use_generation(user_id)
+    if not success:
+        await message.answer(
+            "❌ У вас закінчилися безкоштовні спроби та кредити!\n"
+            "Поповніть баланс у «🛒 Магазин зірок»."
+        )
+        await state.clear()
+        return
+
+    state_data = await state.get_data()
+    style_name = state_data.get("photo_type", "Загальний стиль")
+
+    status_msg = await message.answer("🚀 Починаємо обробку фото...")
+    await animate_progress(status_msg, style_name)
+
+    photo_file_id = message.photo[-1].file_id
+
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass
+
+    await message.answer_photo(
+        photo=photo_file_id,
+        caption=(
+            f"✨ **Обробку завершено!**\n"
+            f"🎨 Стиль: _{style_name}_\n\n"
+            f"Якщо результат бракований, натисніть кнопку нижче:"
+        ),
+        reply_markup=user_result_keyboard(),
+        parse_mode="Markdown",
+    )
+    await state.clear()
+
+
+# ================= Заявка про брак від юзера =================
 @dp.callback_query(F.data == "user_report_defect")
 async def process_user_defect_report(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -410,7 +499,6 @@ async def process_user_defect_report(callback: types.CallbackQuery):
 
 
 # ================= Колбеки модератора =================
-
 @dp.callback_query(F.data.startswith("mod_"))
 async def process_moderation(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
@@ -454,6 +542,16 @@ async def process_moderation(callback: types.CallbackQuery):
 
 
 # ================= Оплата Telegram Stars =================
+@dp.message(Command("shop", "buy"))
+@dp.message(F.text == "🛒 Магазин зірок")
+async def cmd_shop(message: Message):
+    await message.answer(
+        "🛒 **Магазин покупок за Telegram Stars (XTR)**\n\n"
+        "Оберіть потрібний пакет. Оплата проходить миттєво й безпечно:",
+        reply_markup=shop_keyboard(),
+        parse_mode="Markdown",
+    )
+
 
 @dp.callback_query(
     F.data.in_(["buy_50_credits", "buy_100_credits", "buy_vip_sub"])
@@ -537,19 +635,26 @@ async def process_successful_payment(message: Message):
         pass
 
 
-# ================= Адмін-команди =================
+@dp.message(F.text == "ℹ️ Допомога")
+async def cmd_help(message: Message):
+    await message.answer(
+        "ℹ️ **Довідка:**\n\n"
+        f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
+        "• Можна генерувати зображення з нуля за текстовим описом або стилізувати власні фото.\n"
+        "• У разі бракованого результату скористайтеся кнопкою **«⚠️ Брак»** для компенсації.",
+        parse_mode="Markdown",
+    )
 
+
+# ================= Адмін-команди =================
 @dp.message(Command("stats"))
 async def cmd_stats(message: Message):
     if message.from_user.id == ADMIN_ID:
         db = load_db()
-        total_users = len(db)
         await message.answer(
-            f"📊 **Статистика бота:**\n\n👥 Всього користувачів у базі: **{total_users}**",
+            f"📊 **Статистика бота:**\n\n👥 Всього користувачів у базі: **{len(db)}**",
             parse_mode="Markdown",
         )
-    else:
-        await message.answer("❌ У вас немає прав на цю команду.")
 
 
 @dp.message(Command("addcredits"))
@@ -557,31 +662,16 @@ async def cmd_add_credits(message: Message):
     if message.from_user.id == ADMIN_ID:
         parts = message.text.split()
         if len(parts) >= 3:
-            target_user_id = int(parts[1])
-            credits_amount = int(parts[2])
-
-            updated_data = update_user_purchase(
-                target_user_id, credits_to_add=credits_amount
-            )
-            await message.answer(
-                f"✅ Нараховано **{credits_amount}** кредитів юзеру `{target_user_id}`."
-            )
-
+            target_user_id, credits_amount = int(parts[1]), int(parts[2])
+            updated_data = update_user_purchase(target_user_id, credits_to_add=credits_amount)
+            await message.answer(f"✅ Нараховано **{credits_amount}** кредитів юзеру `{target_user_id}`.")
             try:
                 await bot.send_message(
                     target_user_id,
-                    f"🎁 **Адміністратор нарахував вам {credits_amount} кредит(ів)!**\n"
-                    f"💰 Поточний баланс: **{updated_data['credits']}**",
+                    f"🎁 **Адміністратор нарахував вам {credits_amount} кредит(ів)!**\n💰 Поточний баланс: **{updated_data['credits']}**",
                 )
             except Exception:
                 pass
-        else:
-            await message.answer(
-                "ℹ️ Формат: `/addcredits [user_id] [кількість]`",
-                parse_mode="Markdown",
-            )
-    else:
-        await message.answer("❌ У вас немає прав на цю команду.")
 
 
 @dp.message(Command("refund"))
@@ -589,37 +679,16 @@ async def cmd_refund_manual(message: Message):
     if message.from_user.id == ADMIN_ID:
         parts = message.text.split()
         if len(parts) >= 3:
-            target_user_id = int(parts[1])
-            credits_to_return = int(parts[2])
-
-            updated_data = update_user_purchase(
-                target_user_id, credits_to_add=credits_to_return
-            )
-            await message.answer(
-                f"✅ Успішно повернуто **{credits_to_return}** кредитів юзеру `{target_user_id}`."
-            )
-
+            target_user_id, credits_to_return = int(parts[1]), int(parts[2])
+            updated_data = update_user_purchase(target_user_id, credits_to_add=credits_to_return)
+            await message.answer(f"✅ Успішно повернуто **{credits_to_return}** кредитів юзеру `{target_user_id}`.")
             try:
                 await bot.send_message(
                     target_user_id,
-                    f"🎁 **Адміністратор повернув вам {credits_to_return} кредит(ів)!**\n"
-                    f"💰 Ваш поточний баланс: **{updated_data['credits']}**",
+                    f"🎁 **Адміністратор повернув вам {credits_to_return} кредит(ів)!**\n💰 Ваш поточний баланс: **{updated_data['credits']}**",
                 )
             except Exception:
                 pass
-        else:
-            await message.answer("ℹ️ Формат: `/refund [user_id] [кредити]`")
-    else:
-        await message.answer("❌ У вас немає прав на цю команду.")
-
-
-@dp.message(Command("stop"))
-async def cmd_stop(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        await message.answer("🛑 Бот зупинений.")
-        await dp.stop_polling()
-    else:
-        await message.answer("❌ У вас немає прав на цю команду.")
 
 
 # ================= Вебсервер для Render =================
