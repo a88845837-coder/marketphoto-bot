@@ -16,7 +16,7 @@ from aiogram.types import (
 
 # ================= Налаштування =================
 BOT_TOKEN = "ТВІЙ_ТОКЕН_БОТА"  # Вкажи свій токен
-ADMIN_ID = 5694967765  # Твій Telegram ID
+ADMIN_ID = 5694967765        # Твій Telegram ID
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -123,21 +123,19 @@ def shop_keyboard():
     )
 
 
-# ================= Хендлери (Команди та кнопки) =================
+# ================= Хендлери =================
 
-
-# Команда /start
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
-    user_data = get_user_data(message.from_user.id)
+    get_user_data(message.from_user.id)
     text = (
         f"Привіт, {message.from_user.first_name}! 👋\n\n"
-        f"Ласкаво просимо до бота! Обирайте необхідні розділи в меню нижче."
+        f"Ласкаво просимо до бота! Обирай необхідні розділи в меню нижче."
     )
     await message.answer(text, reply_markup=main_keyboard())
 
 
-# Команда /profile або кнопка "👤 Профіль"
+# Профіль з кредитами та зірками
 @dp.message(Command("profile"))
 @dp.message(F.text == "👤 Профіль")
 async def cmd_profile(message: Message):
@@ -146,7 +144,6 @@ async def cmd_profile(message: Message):
     stars_spent = user_data.get("stars_spent", 0)
     sub_until = user_data.get("sub_until", 0)
 
-    # Перевірка статусу підписки
     sub_status = "Немає"
     if sub_until > time.time():
         time_left = int((sub_until - time.time()) / (24 * 3600))
@@ -162,7 +159,7 @@ async def cmd_profile(message: Message):
     await message.answer(profile_text, parse_mode="Markdown")
 
 
-# Команда /shop, /buy або кнопка "🛒 Магазин зірок"
+# Магазин зірок
 @dp.message(Command("shop", "buy"))
 @dp.message(F.text == "🛒 Магазин зірок")
 async def cmd_shop(message: Message):
@@ -174,7 +171,6 @@ async def cmd_shop(message: Message):
     )
 
 
-# Кнопка "⚙️ Послуги / Функції"
 @dp.message(F.text == "⚙️ Послуги / Функції")
 async def cmd_services(message: Message):
     user_data = get_user_data(message.from_user.id)
@@ -189,19 +185,17 @@ async def cmd_services(message: Message):
         )
 
 
-# Кнопка "ℹ️ Допомога"
 @dp.message(F.text == "ℹ️ Допомога")
 async def cmd_help(message: Message):
     await message.answer(
         "ℹ️ **Довідка:**\n\n"
         "• Оплата здійснюється виключно за допомогою Telegram Stars.\n"
-        "• Баланс кредитів поповнюється автоматично після успішної оплати.\n"
+        "• Баланс поповнюється автоматично після успішної транзакції.\n"
         "• З усіх питань звертайтеся до адміністратора."
     )
 
 
-# ================= Обробка покупок за Telegram Stars =================
-
+# ================= Покупка та оплата через Telegram Stars =================
 
 @dp.callback_query(
     F.data.in_(["buy_50_credits", "buy_100_credits", "buy_vip_sub"])
@@ -230,21 +224,19 @@ async def process_buy_callback(callback: types.CallbackQuery):
         title=title,
         description=desc,
         payload=payload,
-        provider_token="",  # ДЛЯ TELEGRAM STARS ЦЕ ПОЛЕ ОБОВ'ЯЗКОВО ПОРОЖНЄ!
-        currency="XTR",  # Офіційна валюта Telegram Stars
+        provider_token="",  # Для зірок завжди пустий рядок!
+        currency="XTR",     # Валюта Telegram Stars
         prices=prices,
         start_parameter="buy-stars",
     )
     await callback.answer()
 
 
-# Перевірка перед виконанням платежу (PreCheckoutQuery)
 @dp.pre_checkout_query()
 async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
     await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
-# Обробка успішного платежу (Telegram Stars)
 @dp.message(F.successful_payment)
 async def process_successful_payment(message: Message):
     payment_info = message.successful_payment
@@ -284,10 +276,8 @@ async def process_successful_payment(message: Message):
         pass
 
 
-# ================= Адмін-команди =================
+# ================= Зупинка бота =================
 
-
-# Команда /stop для адміна
 @dp.message(Command("stop"))
 async def cmd_stop(message: Message):
     if message.from_user.id == ADMIN_ID:
