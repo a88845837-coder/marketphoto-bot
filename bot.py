@@ -14,12 +14,9 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
-# 📌 Ваш Telegram ID для отримання заявок на оплату
+# 📌 Ваш Telegram ID адміністратора
 ADMIN_ID = 5694967765
-
-# 📌 Ваш реальний номер картки
 CARD_NUMBER = "4874 0700 7067 8378"
-
 DATA_FILE = "users_db.json"
 
 
@@ -55,22 +52,31 @@ def get_user_data(user_id):
   return db[str_id]
 
 
-def update_user_credits(user_id, amount):
+def add_credits_to_user(user_id, amount):
   db = load_db()
   str_id = str(user_id)
-  if str_id in db:
-    db[str_id]["credits"] += amount
-    save_db(db)
+  today = str(datetime.date.today())
+  
+  if str_id not in db:
+    db[str_id] = {"credits": 15, "last_date": today, "is_pro": False}
+  
+  db[str_id]["credits"] += amount
+  save_db(db)
+  print(f"Успішно додано {amount} кредитів для користувача {user_id}. Новий баланс: {db[str_id]['credits']}")
 
 
-def set_user_pro(user_id, is_pro=True):
+def set_user_pro_status(user_id, is_pro=True):
   db = load_db()
   str_id = str(user_id)
-  if str_id in db:
-    db[str_id]["is_pro"] = is_pro
-    if is_pro:
-      db[str_id]["credits"] = 9999
-    save_db(db)
+  today = str(datetime.date.today())
+  
+  if str_id not in db:
+    db[str_id] = {"credits": 15, "last_date": today, "is_pro": False}
+    
+  db[str_id]["is_pro"] = is_pro
+  if is_pro:
+    db[str_id]["credits"] = 9999
+  save_db(db)
 
 
 # Словник для швидкого перекладу
@@ -126,7 +132,7 @@ def get_universal_prompt(user_text, style="standard"):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Direct Card Payment) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot (Fixed Admin Payments) is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -266,10 +272,10 @@ def callback_claim_payment(call):
   admin_markup = types.InlineKeyboardMarkup()
   admin_markup.add(
       types.InlineKeyboardButton(
-          "✅ Підтвердити", callback_data=f"approve_{call.data}_{user_id}"
+          "✅ Підтвердити", callback_data=f"appr_{call.data}_{user_id}"
       ),
       types.InlineKeyboardButton(
-          "❌ Відхилити", callback_data=f"decline_{user_id}"
+          "❌ Відхилити", callback_data=f"decl_{user_id}"
       ),
   )
 
@@ -289,28 +295,32 @@ def callback_claim_payment(call):
 
 
 @bot.callback_query_handler(
-    func=lambda call: call.data.startswith("approve_") or call.data.startswith("decline_")
+    func=lambda call: call.data.startswith("appr_") or call.data.startswith("decl_")
 )
 def callback_admin_action(call):
   if call.from_user.id != ADMIN_ID:
     bot.answer_callback_query(call.id, "❌ Ви не адміністратор!", show_alert=True)
     return
 
-  data = call.data.split("_")
-  action = data[0]
+  parts = call.data.split("_")
+  action = parts[0]
 
-  if action == "approve":
-    pack_type = data[1] + "_" + data[2]
-    target_user_id = int(data[3])
+  if action == "appr":
+    pack_type = parts[1]
+    target_user_id = int(parts[2])
 
     if pack_type == "claim_50":
-      update_user_credits(target_user_id, 50)
+      add_credits_to_user(target_user_id, 50)
       msg_text = "🎉 **Вашу оплату підтверджено!** Нараховано +50 кредитів. 💎"
     else:
-      set_user_pro(target_user_id, True)
+      set_user_pro_status(target_user_id, True)
       msg_text = "⭐ **Вашу оплату підтверджено!** PRO-підписку активовано. 🚀"
 
-    bot.send_message(target_user_id, msg_text, parse_mode="Markdown")
+    try:
+      bot.send_message(target_user_id, msg_text, parse_mode="Markdown")
+    except Exception as e:
+      print(f"Не вдалось надіслати повідомлення покупцю: {e}")
+
     bot.edit_message_text(
         f"✅ **УСПІШНО ПІДТВЕРДЖЕНО** для ID `{target_user_id}`!",
         call.message.chat.id,
@@ -318,14 +328,18 @@ def callback_admin_action(call):
         parse_mode="Markdown",
     )
 
-  elif action == "decline":
-    target_user_id = int(data[1])
-    bot.send_message(
-        target_user_id,
-        "❌ **Оплату не знайдено.** Перевірте, чи ви переказали кошти та вказали"
-        " правильний ID у коментарі.",
-        parse_mode="Markdown",
-    )
+  elif action == "decl":
+    target_user_id = int(parts[1])
+    try:
+      bot.send_message(
+          target_user_id,
+          "❌ **Оплату не знайдено.** Перевірте, чи ви переказали кошти та вказали"
+          " правильний ID у коментарі.",
+          parse_mode="Markdown",
+      )
+    except:
+      pass
+
     bot.edit_message_text(
         f"❌ **ВІДХИЛЕНО** для ID `{target_user_id}`.",
         call.message.chat.id,
@@ -401,7 +415,13 @@ def process_generation(message, user_text):
     img_response = requests.get(image_url, headers=headers, timeout=120)
     if img_response.status_code == 200:
       if not user.get("is_pro", False):
-        update_user_credits(user_id, -5)
+        update_user_credits = get_user_data(user_id)
+        # Списуємо 5 кредитів
+        db = load_db()
+        str_id = str(user_id)
+        if str_id in db:
+          db[str_id]["credits"] -= 5
+          save_db(db)
         credits_left = get_user_data(user_id)["credits"]
       else:
         credits_left = "Безліміт ⭐"
@@ -441,5 +461,5 @@ if __name__ == "__main__":
     bot.set_webhook(url=webhook_url)
     print(f"Webhook встановлено: {webhook_url}")
 
-  port = int(os.environ.File.get("PORT", 10000)) if hasattr(os.environ, 'File') else int(os.environ.get("PORT", 10000))
+  port = int(os.environ.get("PORT", 10000))
   app.run(host="0.0.0.0", port=port)
