@@ -17,8 +17,14 @@ app = Flask("")
 # 📌 Ваш Telegram ID для отримання заявок на оплату
 ADMIN_ID = 5694967765
 
-# 📌 Ваш номер картки для оплати
+# 📌 Ваш номер картки
 CARD_NUMBER = "4874 0700 7067 8378"
+
+# Посилання на швидку оплату/переказ на вашу картку в Monobank
+# (працює як універсальне посилання, відкриває додаток Mono або веб-сторінку)
+MONO_PAY_LINK = f"https://send.monobank.ua/jar/ВАШЕ_ПОСИЛАННЯ_НА_БАНКУ"  
+# Або пряме посилання на оплату за карткою (можна залишити клікабельну кнопку з номером)
+
 DATA_FILE = "users_db.json"
 
 
@@ -125,7 +131,7 @@ def get_universal_prompt(user_text, style="standard"):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Card Payment) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot (Card Links) is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -216,45 +222,26 @@ def cmd_profile(message):
 
 @bot.message_handler(commands=["buy"])
 def cmd_buy(message):
+  user_id = message.from_user.id
+  
+  # Створюємо кнопку з посиланням на оплату або картку
+  # Замість посилання нижче можна використати посилання на Mono-банку або швидку оплату
+  payment_url = "https://send.monobank.ua/jar/ВАШЕ_ПОСИЛАННЯ_НА_БАНКУ" 
+
   markup = types.InlineKeyboardMarkup()
-  markup.add(
-      types.InlineKeyboardButton("💳 Оплатити 50 кредитів (55 грн)", callback_data="pay_card_50")
-  )
-  markup.add(
-      types.InlineKeyboardButton("⭐ Оплатити PRO (199 грн)", callback_data="pay_card_pro")
-  )
+  # Кнопка-посилання на оплату карткою
+  markup.add(types.InlineKeyboardButton("💳 Оплатити на картку (Mono)", url=payment_url))
+  # Кнопки підтвердження після оплати
+  markup.add(types.InlineKeyboardButton("✅ Я оплатив 50 кредитів (55 грн)", callback_data="claim_50"))
+  markup.add(types.InlineKeyboardButton("⭐ Я оплатив PRO (199 грн)", callback_data="claim_pro"))
 
   bot.reply_to(
       message,
-      "🛒 **Магазин підписок та кредитів**\n\nОберіть пакет, який хочете придбати:",
-      reply_markup=markup,
-      parse_mode="Markdown",
-  )
-
-
-# --- ВИДАЧА РЕКВІЗИТІВ КАРТКИ ---
-
-
-@bot.callback_query_handler(func=lambda call: call.data in ["pay_card_50", "pay_card_pro"])
-def callback_card_payment(call):
-  user_id = call.from_user.id
-  if call.data == "pay_card_50":
-    pack_title = "+50 кредитів (55 грн)"
-    claim_data = "claim_50"
-  else:
-    pack_title = "PRO Підписку (199 грн)"
-    claim_data = "claim_pro"
-
-  markup = types.InlineKeyboardMarkup()
-  markup.add(types.InlineKeyboardButton("✅ Я оплатив (-ла)", callback_data=claim_data))
-
-  bot.edit_message_text(
-      f"💳 **Реквізити для оплати ({pack_title}):**\n\n"
-      f"Номер картки: `{CARD_NUMBER}`\n\n"
-      f"📌 **ОБОВ'ЯЗКОВО** в коментарі до переказу вкажіть ваш ID: `{user_id}`\n\n"
-      "Після здійснення переказу натисніть кнопку **«✅ Я оплатив (-ла)»** нижче:",
-      call.message.chat.id,
-      call.message.message_id,
+      "🛒 **Магазин підписок та кредитів**\n\n"
+      f"💳 **Номер картки для оплати:** `{CARD_NUMBER}`\n\n"
+      "1. Натисніть кнопку **«Оплатити на картку»** або скопіюйте номер вище.\n"
+      f"2. У коментарі до переказу обов'язково вкажіть ваш ID: `{user_id}`\n"
+      "3. Після переказу натисніть кнопку підтвердження нижче! 🚀",
       reply_markup=markup,
       parse_mode="Markdown",
   )
@@ -277,11 +264,10 @@ def callback_claim_payment(call):
   bot.send_message(
       call.message.chat.id,
       "⏳ **Запит на перевірку надіслано!** Дякуємо! Адміністратор перевірить"
-      " надходження коштів на картку і підтвердить платіж.",
+      " надходження кошти та підтвердить платіж.",
       parse_mode="Markdown",
   )
 
-  # Кнопки для вас (адміна)
   admin_markup = types.InlineKeyboardMarkup()
   admin_markup.add(
       types.InlineKeyboardButton(
@@ -349,7 +335,7 @@ def callback_admin_action(call):
         f"❌ **ВІДХИЛЕНО** для ID `{target_user_id}`.",
         call.message.chat.id,
         call.message.message_id,
-        parse_mode="Markdown",
+        parse_Mode="Markdown",
     )
 
 
