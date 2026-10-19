@@ -41,16 +41,13 @@ smart_dictionary = {
 def translate_to_english(ukr_text):
   lower_text = ukr_text.lower().strip()
 
-  # 1. Шукаємо точний збіг у словнику
   if lower_text in smart_dictionary:
     return smart_dictionary[lower_text]
 
-  # Шукаємо частковий збіг
   for key, val in smart_dictionary.items():
     if key in lower_text:
       return val
 
-  # 2. Якщо немає в словнику — робимо запит до перекладача
   try:
     url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(ukr_text)}&langpair=uk|en"
     response = requests.get(url, timeout=8)
@@ -66,10 +63,7 @@ def translate_to_english(ukr_text):
   except Exception as e:
     print(f"Помилка перекладу: {e}")
 
-  # 3. Захисний фолбек, якщо переклад не вдався
-  return (
-      f"high-end commercial product of {ukr_text}, premium advertising shot"
-  )
+  return f"high-end commercial product of {ukr_text}, premium advertising shot"
 
 
 def get_universal_prompt(user_text):
@@ -79,7 +73,6 @@ def get_universal_prompt(user_text):
       f" '{translated_subject}'"
   )
 
-  # Професійний рекламний промпт для ідеальної якості
   return (
       f"Commercial advertising product photography of {translated_subject},"
       " studio softbox lighting, cinematic sharp focus, hyper-realistic"
@@ -105,28 +98,76 @@ def webhook():
     return "Invalid content type", 403
 
 
+# --- ОБРОБНИКИ КОМАНД ---
+
+
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
   bot.reply_to(
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
-      "✨ Я створюю ідеальні професійні фото будь-яких товарів.\n\n"
-      "💬 Надішли назву товару (наприклад: *стакан води*, *кава*, *кросівки*),"
-      " і я зроблю бездоганне фото! 🚀",
+      "✨ Я створюю ідеальні професійні студійні фото будь-яких товарів.\n\n"
+      "📌 **Доступні команди:**\n"
+      "• `/generate <товар>` — згенерувати фото товару\n"
+      "• `/styles` — переглянути доступні стилі зйомки\n"
+      "• `/help` — інструкція з використання\n\n"
+      "💬 Або просто надішли назву товару текстом (наприклад: *гроші*,"
+      " *годинник*, *кава*), і я зроблю бездоганне фото! 🚀",
+      parse_mode="Markdown",
   )
 
 
-@bot.message_handler(commands=["generate", "styles"])
+@bot.message_handler(commands=["help"])
+def send_help(message):
+  bot.reply_to(
+      message,
+      "📖 **Довідка по використанню MarketPhoto AI** 📸\n\n"
+      "Цей бот створений для генерації професійних комерційних фото товарів"
+      " для маркетплейсів, Instagram та інтернет-магазинів.\n\n"
+      "**Як користуватися:**\n"
+      "1. Просто напиши назву або опис товару українською мовою (наприклад:"
+      " *гроші*, *шкіряна сумка*, *парфуми*).\n"
+      "2. Скористайся командою `/generate <опис>` для швидкого запуску.\n"
+      "3. Перевір доступні варіанти оформлення за допомогою `/styles`.\n\n"
+      "🚫 **Усі фото генеруються чітко без людей та облич** — тільки сам"
+      " товар на чистому білому фоні у високій якості 8k! ✨",
+      parse_mode="Markdown",
+  )
+
+
+@bot.message_handler(commands=["styles"])
+def send_styles(message):
+  bot.reply_to(
+      message,
+      "🎨 **Доступні стилі комерційної зйомки:**\n\n"
+      "1. **Студійний каталожний стиль** — м'яке світло софтбоксів, чистий білий"
+      " фокус, детальна текстура.\n"
+      "2. **Преміум-люкс** — витончене контрастне освітлення для дорогих"
+      " товарів.\n"
+      "3. **Рекламний мінімалізм** — ідеальна ізоляція предмета для"
+      " маркетплейсів.\n\n"
+      "💡 Бот автоматично застосовує найкращий стиль до кожного вашого"
+      " запиту! Просто надішліть назву товару.",
+      parse_mode="Markdown",
+  )
+
+
+@bot.message_handler(commands=["generate"])
 def cmd_generate(message):
-  text = message.text.replace("/generate", "").replace("/styles", "").strip()
+  text = message.text.replace("/generate", "").strip()
   if text:
     generate_and_send_photo(message, text)
   else:
     bot.reply_to(
         message,
-        "🎨 Напишіть назву товару після команди, наприклад: `/generate стакан"
-        " води` або просто текстом!",
+        "🎨 **Режим преміум-генерації!**\n\nНапишіть назву товару після команди,"
+        " наприклад:\n`/generate гроші`\n\nАбо просто надішліть опис"
+        " звичайним повідомленням! 📸✨",
+        parse_mode="Markdown",
     )
+
+
+# --- ОБРОБНИК ЗВИЧАЙНИХ ПОВІДОМЛЕНЬ ---
 
 
 @bot.message_handler(
