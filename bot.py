@@ -105,11 +105,13 @@ def use_generation(user_id: int):
 def enhance_prompt(user_prompt: str, style: str) -> str:
     p = user_prompt.strip().lower()
     
+    # Словник для точного перекладу і розуміння запитів
     dictionary = {
+        "губка боб": "SpongeBob SquarePants cartoon character, vibrant colors, digital art",
+        "губка боб квадратні штани": "SpongeBob SquarePants cartoon character, vibrant colors",
         "полуниця": "fresh juicy red strawberry on a green leaf, macro shot, photorealistic, 4k",
         "полуниці": "fresh juicy red strawberries, macro shot, photorealistic, 4k",
         "хмаринка": "soft fluffy white clouds in a bright blue sky, scenic, 4k",
-        "хмари": "soft fluffy white clouds in a bright blue sky, scenic, 4k",
         "банани": "bunch of fresh yellow bananas on a table, realistic, 4k",
         "банан": "fresh yellow banana, realistic",
         "бетмен": "Batman superhero dark knight, cinematic lighting, highly detailed",
@@ -131,10 +133,7 @@ def enhance_prompt(user_prompt: str, style: str) -> str:
             break
 
     if style == "Стильна Аватарка":
-        if any(w in p for w in ["полуниц", "хмарин", "банан", "авто", "бмв", "машина", "космос", "кіт", "собака", "бетмен"]):
-            extra = "high quality, masterpiece, vivid colors, centered"
-        else:
-            extra = "high quality, detailed portrait, masterpiece, centered composition"
+        extra = "high quality, masterpiece, vivid colors, centered composition"
     elif style == "Заставка / Шпалери":
         extra = "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting"
     else:
@@ -245,7 +244,7 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
 
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
+        ("🚀 **Запуск нейромережі Microsoft / DALL-E...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
         ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення деталей...*", 0.4),
         ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна обробка...*", 0.4),
         ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Відправляємо результат...*", 0.2),
@@ -278,7 +277,8 @@ async def process_text_gen(message: Message, state: FSMContext):
     await animate_progress(status_msg, s_name)
 
     prompt = enhance_prompt(message.text, s_name)
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux&nologo=true"
+    # Змінено модель на dall-e від Microsoft
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=dall-e&nologo=true"
 
     try:
         await status_msg.delete()
@@ -377,4 +377,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
