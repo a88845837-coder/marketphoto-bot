@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import time
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
@@ -15,8 +16,8 @@ from aiogram.types import (
 )
 
 # ================= Налаштування =================
-BOT_TOKEN = "8616836203:AAGImAKF-vFvJOQ0Qo1VSQ8mZFoPJ8nkzLs"  # Твій новий активний токен
-ADMIN_ID = 5694967765                                         # Твій Telegram ID
+BOT_TOKEN = "8616836203:AAGImAKF-vFvJOQ0Qo1VSQ8mZFoPJ8nkzLs"
+ADMIN_ID = 5694967765
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -135,7 +136,6 @@ async def cmd_start(message: Message):
     await message.answer(text, reply_markup=main_keyboard())
 
 
-# Профіль з кредитами та зірками
 @dp.message(Command("profile"))
 @dp.message(F.text == "👤 Профіль")
 async def cmd_profile(message: Message):
@@ -159,7 +159,6 @@ async def cmd_profile(message: Message):
     await message.answer(profile_text, parse_mode="Markdown")
 
 
-# Магазин зірок
 @dp.message(Command("shop", "buy"))
 @dp.message(F.text == "🛒 Магазин зірок")
 async def cmd_shop(message: Message):
@@ -195,7 +194,7 @@ async def cmd_help(message: Message):
     )
 
 
-# ================= Покупка та оплата через Telegram Stars =================
+# ================= Оплата через Telegram Stars =================
 
 @dp.callback_query(
     F.data.in_(["buy_50_credits", "buy_100_credits", "buy_vip_sub"])
@@ -224,8 +223,8 @@ async def process_buy_callback(callback: types.CallbackQuery):
         title=title,
         description=desc,
         payload=payload,
-        provider_token="",  # Для зірок завжди пустий рядок!
-        currency="XTR",     # Валюта Telegram Stars
+        provider_token="",
+        currency="XTR",
         prices=prices,
         start_parameter="buy-stars",
     )
@@ -258,40 +257,4 @@ async def process_successful_payment(message: Message):
         user_data = update_user_purchase(
             user_id, credits_to_add=50, stars_spent=stars, days_sub=30
         )
-        msg_text = f"👑 **VIP Підписку активовано!**\n\n📅 Термін: **30 днів**\n➕ Додано: **50 бонусних кредитів**"
-
-    await message.answer(msg_text, parse_mode="Markdown")
-
-    # Сповіщення адміністратору
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"🔔 **Нова оплата зірками!**\n\n"
-            f"Користувач: @{message.from_user.username or 'немає'} (ID: `{user_id}`)\n"
-            f"Сума: **{stars} Stars (XTR)**\n"
-            f"Товар: `{payload}`",
-            parse_mode="Markdown",
-        )
-    except Exception:
-        pass
-
-
-# ================= Зупинка бота =================
-
-@dp.message(Command("stop"))
-async def cmd_stop(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        await message.answer("🛑 Бот зупинений.")
-        await dp.stop_polling()
-    else:
-        await message.answer("❌ У вас немає прав на цю команду.")
-
-
-# ================= Запуск =================
-async def main():
-    print("🚀 Бот успішно запущений і працює!")
-    await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        msg_text = f"👑 **VIP Підписку активовано!**\n\n📅 Термін: **30 днів**\n➕ Додано: **
