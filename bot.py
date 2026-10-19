@@ -245,7 +245,7 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
 
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі Flux 8K...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка промту...*", 0.3),
+        ("🚀 **Запуск нейромережі Flux...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка промту...*", 0.3),
         ("🎨 **Рендеринг високої деталізації...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення текстури...*", 0.4),
         ("✨ **Штучний інтелект покращує світло...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна полірування...*", 0.4),
         ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження ультра-якості...*", 0.2),
@@ -278,12 +278,14 @@ async def process_text_gen(message: Message, state: FSMContext):
     await animate_progress(status_msg, s_name)
 
     prompt = enhance_prompt(message.text, s_name)
-    api_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux-realism&nologo=true"
+    seed = int(time.time() * 1000) % 100000
+    # Використовуємо стабільну базову модель flux з унікальним seed та nologo=true
+    api_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux&seed={seed}&nologo=true"
 
     image_bytes = None
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=30) as resp:
+            async with session.get(api_url, timeout=35) as resp:
                 if resp.status == 200:
                     image_bytes = await resp.read()
     except Exception as e:
