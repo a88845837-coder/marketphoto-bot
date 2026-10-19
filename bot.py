@@ -14,8 +14,10 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
-# 📌 Ваш чинний Telegram ID адміністратора
-ADMIN_ID = 5694967765
+# 📌 Ваш актуальний Telegram ID адміністратора (з якого ви підтверджуєте оплати)
+ADMIN_ID = 7175671201
+
+# 📌 Ваш номер картки для оплати
 CARD_NUMBER = "4874 0700 7067 8378"
 DATA_FILE = "users_db.json"
 
@@ -133,7 +135,7 @@ def get_universal_prompt(user_text, style="standard"):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Active) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot (Admin Fixed) is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -279,7 +281,6 @@ def callback_claim_payment(call):
       ),
   )
 
-  # Надсилаємо сповіщення адміністратору і виводимо лог на сервері Render
   try:
     bot.send_message(
         ADMIN_ID,
@@ -293,14 +294,13 @@ def callback_claim_payment(call):
     )
     print(f"🔔 Адміну ({ADMIN_ID}) надіслано заявку від користувача {user_id}")
   except Exception as e:
-    print(f"❌ Помилка надсилання сповіщення адміну (перевірте ADMIN_ID): {e}")
+    print(f"❌ Помилка надсилання сповіщення адміну: {e}")
 
 
 @bot.callback_query_handler(
     func=lambda call: call.data.startswith("appr_") or call.data.startswith("decl_")
 )
 def callback_admin_action(call):
-  # Надійний захист: перевіряємо, чи це тицьнув саме адміністратор
   if call.from_user.id != ADMIN_ID:
     bot.answer_callback_query(call.id, "❌ Ви не адміністратор!", show_alert=True)
     return
@@ -319,10 +319,9 @@ def callback_admin_action(call):
       set_user_pro_status(target_user_id, True)
       msg_text = "⭐ **Вашу оплату підтверджено!** PRO-підписку активовано. 🚀"
 
-    # Обов'язково надсилаємо повідомлення покупцю
     try:
       bot.send_message(target_user_id, msg_text, parse_mode="Markdown")
-      print(f"✅ Повідомлення про успіх успішно доставлено користувачу {target_user_id}")
+      print(f"✅ Повідомлення доставлено користувачу {target_user_id}")
     except Exception as e:
       print(f"❌ Не вдалось надіслати повідомлення покупцю {target_user_id}: {e}")
 
