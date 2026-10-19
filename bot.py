@@ -16,7 +16,7 @@ def home():
 
 
 TOKEN = "8616836203:AAGkRFDiPqI2QUahx45iDBm7NyqbPwbv1wA"
-GEMINI_API_KEY = "AQ.Ab8RN6KQpPZjjgQtQnCOwQnvAaSlmBEbKDsKh06iEB5jld1esQ"
+GEMINI_API_KEY = "AQ.Ab8RN6JHrxiEhFM_nbVGBTUmBEzIdlKHdp0f3G5rCP_roFJc2A"
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -47,26 +47,30 @@ def cmd_generate(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
   bot.send_chat_action(message.chat.id, "upload_photo")
+  user_text = message.text
+  image_prompt = user_text  # Запасний варіант (якщо Gemini пропустить)
 
-  if not client:
-    bot.reply_to(message, "❌ Помилка ініціалізації клієнта AI.")
-    return
+  # Спробуємо покращити промпт через Gemini
+  if client:
+    try:
+      prompt_refiner = client.models.generate_content(
+          model="gemini-2.5-flash",
+          contents=(
+              "Convert this product description into an ultra-detailed,"
+              " professional commercial product photography prompt in English"
+              " for a high-end AI image generator (Flux). Include details about"
+              " professional studio softbox lighting, sharp focus,"
+              " hyper-realistic textures, clean isolated pure seamless white"
+              " background, 8k resolution, e-commerce catalog style, highly"
+              f" detailed: {user_text}"
+          ),
+      )
+      if prompt_refiner and prompt_refiner.text:
+        image_prompt = prompt_refiner.text.strip()
+    except Exception as e:
+      print(f"Попередження Gemini (продовжуємо генерацію): {e}")
 
   try:
-    prompt_refiner = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=(
-            "Convert this product description into an ultra-detailed, professional"
-            " commercial product photography prompt in English for a high-end AI"
-            " image generator (Flux). Include details about professional studio"
-            " softbox lighting, sharp focus, hyper-realistic textures, clean"
-            " isolated pure seamless white background, 8k resolution,"
-            " e-commerce catalog style, highly detailed: "
-            f"{message.text}"
-        ),
-    )
-    image_prompt = prompt_refiner.text.strip()
-
     encoded_prompt = urllib.parse.quote(image_prompt)
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
 
@@ -93,7 +97,7 @@ def handle_message(message):
     bot.reply_to(
         message,
         f"❌ Сталася помилка при генерації:\n`{str(e)}`",
-        parse_Mode="Markdown",
+        parse_mode="Markdown",
     )
 
 
