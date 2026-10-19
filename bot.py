@@ -10,7 +10,7 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
-# Словник для точного перекладу товарів
+# Точний словник для перекладу товарів
 translations = {
     "годинник": "luxury wristwatch",
     "годинники": "luxury wristwatches",
@@ -54,7 +54,6 @@ def home():
   return "MarketPhoto AI Bot is running via Webhook 24/7! 🚀"
 
 
-# Вебхук-ендпоінт для отримання повідомлень від Telegram
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
   if request.headers.get("content-type") == "application/json":
@@ -113,7 +112,15 @@ def generate_and_send_photo(message, user_text):
     encoded_prompt = urllib.parse.quote(image_prompt)
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
 
-    img_response = requests.get(image_url, timeout=120)
+    # Додаємо заголовки браузера, щоб уникнути блокування запиту
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
+            " like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+    img_response = requests.get(image_url, headers=headers, timeout=120)
+    print(f"Статус відповіді від генератора: {img_response.status_code}")
 
     if img_response.status_code == 200:
       photo_file = io.BytesIO(img_response.content)
@@ -133,8 +140,12 @@ def generate_and_send_photo(message, user_text):
           parse_mode="Markdown",
       )
     else:
+      print(f"Помилка генератора: {img_response.text}")
       bot.edit_message_text(
-          "❌ Не вдалося отримати фото. Спробуйте ще раз!",
+          (
+              "❌ Не вдалося отримати фото (код помилки:"
+              f" {img_response.status_code}). Спробуйте ще раз!"
+          ),
           message.chat.id,
           wait_msg.message_id,
       )
@@ -153,7 +164,6 @@ def generate_and_send_photo(message, user_text):
 
 
 if __name__ == "__main__":
-  # Автоматичне встановлення вебхука на основі публічної URL-адреси Render
   render_url = os.environ.get("RENDER_EXTERNAL_URL")
   if render_url:
     webhook_url = f"{render_url}/{TOKEN}"
