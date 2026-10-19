@@ -25,7 +25,8 @@ def send_welcome(message):
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
       "✨ Я твій професійний AI-генератор студійних фото товарів преміум-якості!\n\n"
-      "💬 Напиши мені опис товару (наприклад: *кросівки на білому фоні*), і я згенерую фото каталожної якості! 🚀",
+      "💬 Напиши мені опис товару (наприклад: *кросівки на білому фоні*), і я"
+      " згенерую фото каталожної якості! 🚀",
   )
 
 
@@ -33,7 +34,8 @@ def send_welcome(message):
 def cmd_generate(message):
   bot.reply_to(
       message,
-      "🎨 **Режим преміум-генерації!**\n\nОпишіть товар якомога детальніше! 📸✨",
+      "🎨 **Режим преміум-генерації!**\n\nОпишіть товар якомога детальніше!"
+      " 📸✨",
   )
 
 
@@ -50,7 +52,6 @@ def handle_message(message):
   )
 
   user_text = message.text
-  # Автоматично перетворюємо опис на професійний фото-промпт
   image_prompt = (
       f"Professional commercial product photography of {user_text}, studio"
       " softbox lighting, sharp focus, hyper-realistic textures, clean"
@@ -98,7 +99,7 @@ def handle_message(message):
           parse_mode="Markdown",
       )
     except:
-      bot.reply_to(message, f"❌ Помилка: `{str(e)}`", parse_mode="Markdown")
+      bot.reply_to(message, f"❌ Помилка: `{str(e)}`", parse_Mode="Markdown")
 
 
 def run_bot():
