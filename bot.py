@@ -105,22 +105,22 @@ def use_generation(user_id: int):
 def enhance_prompt(user_prompt: str, style: str) -> str:
     p = user_prompt.strip().lower()
     
-    # Словник точних перекладів
+    # Словник для точного розуміння українських запитів
     dictionary = {
-        "полуниця": "fresh juicy red strawberry, macro shot, 4k",
-        "полуниці": "fresh juicy red strawberries, macro shot, 4k",
-        "банани": "bunch of fresh yellow bananas, realistic, 4k",
+        "полуниця": "fresh juicy red strawberry, macro shot, photorealistic, 4k",
+        "полуниці": "fresh juicy red strawberries, macro shot, photorealistic, 4k",
+        "банани": "bunch of fresh yellow bananas on a table, realistic, 4k",
         "банан": "fresh yellow banana, realistic",
-        "бетмен": "Batman superhero dark knight, cinematic lighting",
+        "бетмен": "Batman superhero dark knight, cinematic lighting, highly detailed",
         "людина-павук": "Spider-Man superhero dynamic action pose",
         "людина павук": "Spider-Man superhero dynamic action pose",
         "рік і морті": "Rick and Morty cartoon style, 2D animation",
-        "бмв": "luxury BMW car, cinematic lighting",
+        "бмв": "luxury BMW car, cinematic lighting, road",
         "автомобіль": "modern luxury car, street background",
         "кіберпанк": "cyberpunk city, neon lights, futuristic",
         "кіт": "cute fluffy cat, detailed fur",
         "собака": "cute happy dog",
-        "космос": "outer space, nebula, stars",
+        "космос": "outer space, colorful nebula, stars",
     }
 
     translated = user_prompt
@@ -130,7 +130,10 @@ def enhance_prompt(user_prompt: str, style: str) -> str:
             break
 
     if style == "Стильна Аватарка":
-        extra = "high quality, masterpiece, vivid colors"
+        if any(w in p for w in ["полуниц", "банан", "авто", "бмв", "машина", "космос", "кіт", "собака", "бетмен"]):
+            extra = "high quality, masterpiece, vivid colors, centered"
+        else:
+            extra = "high quality, detailed portrait, masterpiece, centered composition"
     elif style == "Заставка / Шпалери":
         extra = "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting"
     else:
@@ -239,6 +242,26 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+# ================= Анімація прогресу генерації =================
+async def animate_progress(status_msg: Message, style_name: str):
+    stages = [
+        ("🚀 **Запуск нейромережі Microsoft / DALL-E...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.4),
+        ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення деталей...*", 0.5),
+        ("✨ **Покращення якості та кольорів...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна обробка...*", 0.5),
+        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Відправляємо результат...*", 0.3),
+    ]
+
+    for text, delay in stages:
+        try:
+            await status_msg.edit_text(
+                f"🎨 Стиль: **{style_name}**\n\n{text}",
+                parse_mode="Markdown",
+            )
+            await asyncio.sleep(delay)
+        except Exception:
+            pass
+
+
 @dp.message(PhotoGenerationState.waiting_for_text)
 async def process_text_gen(message: Message, state: FSMContext):
     uid = message.from_user.id
@@ -251,18 +274,21 @@ async def process_text_gen(message: Message, state: FSMContext):
     data = await state.get_data()
     s_name = data.get("photo_type", "Стиль")
 
-    status = await message.answer("🚀 Генеруємо...")
+    # Повернена анімація процесу
+    status_msg = await message.answer("🚀 Починаємо створення...")
+    await animate_progress(status_msg, s_name)
+
     prompt = enhance_prompt(message.text, s_name)
     url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux&nologo=true"
 
     try:
-        await status.delete()
+        await status_msg.delete()
     except Exception:
         pass
 
     await message.answer_photo(
         photo=url,
-        caption=f"✨ **Готово!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
+        caption=f"✨ **Згенеровано за вашим запитом!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
         reply_markup=user_result_keyboard(),
         parse_mode="Markdown",
     )
