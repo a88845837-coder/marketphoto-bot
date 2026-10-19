@@ -39,7 +39,6 @@ def cmd_generate(message):
   )
 
 
-# Обробляємо лише звичайні повідомлення (які НЕ починаються з "/")
 @bot.message_handler(
     func=lambda message: message.text and not message.text.startswith("/")
 )
@@ -99,7 +98,7 @@ def handle_message(message):
           parse_mode="Markdown",
       )
     except:
-      bot.reply_to(message, f"❌ Помилка: `{str(e)}`", parse_Mode="Markdown")
+      bot.reply_to(message, f"❌ Помилка: `{str(e)}`", parse_mode="Markdown")
 
 
 def run_bot():
