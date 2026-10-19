@@ -11,8 +11,26 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask("")
 
 
-# Універсальна функція перекладу будь-якого тексту з української на англійську
+# Функція автоперекладу та адаптації слів під AI
 def translate_to_english(ukr_text):
+  lower_text = ukr_text.lower().strip()
+
+  safety_map = {
+      "гроші": "stack of dollar banknotes",
+      "грошей": "stack of dollar banknotes",
+      "доллари": "stack of hundred dollar bills",
+      "долари": "stack of hundred dollar bills",
+      "готівка": "neat stack of paper currency bills",
+      "валюта": "neat stack of cash notes",
+      "футболка": "blank plain cotton t-shirt",
+      "годинник": "luxury wristwatch",
+      "кросівки": "stylish sports sneakers",
+  }
+
+  for key, val in safety_map.items():
+    if key in lower_text:
+      return val
+
   try:
     url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(ukr_text)}&langpair=uk|en"
     response = requests.get(url, timeout=5)
@@ -23,30 +41,28 @@ def translate_to_english(ukr_text):
         return translated.strip()
   except Exception as e:
     print(f"Помилка перекладу: {e}")
+
   return ukr_text
 
 
 def get_universal_prompt(user_text):
-  # Динамічно перекладаємо те, що написав користувач
   translated_subject = translate_to_english(user_text)
   print(
       f"Оригінал: '{user_text}' | Переклад англійською:"
       f" '{translated_subject}'"
   )
 
-  # Формуємо професійний студійний промпт для будь-якого товару
   return (
-      f"Professional commercial e-commerce product photography of"
-      f" {translated_subject}, studio softbox lighting, sharp focus,"
-      " hyper-realistic textures, isolated on a clean pure seamless white"
-      " background, 8k resolution, catalogue style, advertising shot, highly"
-      " detailed, NO humans, NO faces, NO people"
+      f"Professional commercial product photography of {translated_subject},"
+      " studio softbox lighting, sharp focus, hyper-realistic textures,"
+      " isolated on pure clean white background, 8k resolution, e-commerce"
+      " catalog style, advertising shot, NO humans, NO faces, NO people"
   )
 
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Universal Dynamic) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -65,11 +81,9 @@ def send_welcome(message):
   bot.reply_to(
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
-      "✨ Я твій універсальний AI-генератор студійних фото! Я можу згенерувати"
-      " **абсолютно будь-який товар**, який ти опишеш.\n\n"
-      "💬 Просто надішли мені назву або опис товару українською (наприклад:"
-      " *шкіряна сумка*, *рожевий тостер* або *фірмові кросівки з крилами*),"
-      " і я зроблю професійне фото! 🚀",
+      "✨ Я твій універсальний AI-генератор студійних фото товарів!\n\n"
+      "💬 Надішли назву чи опис товару (наприклад: *футболка*, *годинник*,"
+      " *гроші*), і я згенерую якісне фото! 🚀",
   )
 
 
@@ -82,8 +96,7 @@ def cmd_generate(message):
     bot.reply_to(
         message,
         "🎨 **Режим преміум-генерації!**\n\nНапишіть опис товару після команди,"
-        " наприклад: `/generate шкіряний гаманець` або просто надішліть його"
-        " текстом! 📸✨",
+        " наприклад: `/generate футболка` або просто надішліть текстом! 📸✨",
     )
 
 
@@ -99,65 +112,62 @@ def generate_and_send_photo(message, user_text):
   bot.send_chat_action(message.chat.id, "upload_photo")
 
   wait_msg = bot.reply_to(
-      message,
-      "⏳ **Генерую студійне фото...** Перекладаю та створюю кадр 🎨",
+      message, "⏳ **Генерую студійне фото...** Створюю кадр 🎨"
   )
 
   image_prompt = get_universal_prompt(user_text)
   print(f"Фінальний промпт: {image_prompt}")
 
-  try:
-    encoded_prompt = urllib.parse.quote(image_prompt)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+  # Список абсолютно безкоштовних альтернативних моделей
+  urls_to_try = [
+      f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&model=turbo&nologo=true",
+      f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&nologo=true",
+  ]
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
-            " like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-    img_response = requests.get(image_url, headers=headers, timeout=120)
-    print(f"Статус відповіді генератора: {img_response.status_code}")
-
-    if img_response.status_code == 200:
-      photo_file = io.BytesIO(img_response.content)
-      photo_file.name = "product_photo.jpg"
-
-      try:
-        bot.delete_message(message.chat.id, wait_msg.message_id)
-      except:
-        pass
-
-      bot.send_photo(
-          message.chat.id,
-          photo_file,
-          caption=(
-              "✨ **Готово! Професійне студійне фото товару створено** 📸🔥"
-          ),
-          parse_mode="Markdown",
+  headers = {
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
+          " like Gecko) Chrome/120.0.0.0 Safari/537.36"
       )
-    else:
-      print(f"Помилка генератора: {img_response.text}")
-      bot.edit_message_text(
-          (
-              "❌ Не вдалося отримати фото (код помилки:"
-              f" {img_response.status_code}). Спробуйте ще раз!"
-          ),
-          message.chat.id,
-          wait_msg.message_id,
-      )
+  }
 
-  except Exception as e:
-    print(f"Помилка при генерації: {e}")
+  success = False
+  for img_url in urls_to_try:
     try:
-      bot.edit_message_text(
-          f"❌ Сталася помилка при генерації:\n`{str(e)}`",
-          message.chat.id,
-          wait_msg.message_id,
-          parse_mode="Markdown",
-      )
-    except:
-      bot.reply_to(message, f"❌ Помилка: `{str(e)}`", parse_mode="Markdown")
+      print(f"Спроба генерації через: {img_url}")
+      img_response = requests.get(img_url, headers=headers, timeout=90)
+
+      if img_response.status_code == 200:
+        photo_file = io.BytesIO(img_response.content)
+        photo_file.name = "product_photo.jpg"
+
+        try:
+          bot.delete_message(message.chat.id, wait_msg.message_id)
+        except:
+          pass
+
+        bot.send_photo(
+            message.chat.id,
+            photo_file,
+            caption=(
+                "✨ **Готово! Професійне студійне фото товару створено** 📸🔥"
+            ),
+            parse_mode="Markdown",
+        )
+        success = True
+        break
+      else:
+        print(f"Помилка шлюзу {img_response.status_code}")
+    except Exception as e:
+      print(f"Збій спроби: {e}")
+
+  if not success:
+    bot.edit_message_text(
+        "❌ Сервер генерації тимчасово перевантажений. Спробуйте ще раз через"
+        " пару секунд!",
+        message.chat.id,
+        wait_msg.message_id,
+    )
 
 
 if __name__ == "__main__":
