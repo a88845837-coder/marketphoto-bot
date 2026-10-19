@@ -6,6 +6,8 @@ import time
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -25,6 +27,11 @@ dp = Dispatcher()
 
 DB_FILE = "users_db.json"
 DAILY_FREE_LIMIT = 5
+
+
+# ================= Стан для вибору виду фото =================
+class PhotoGenerationState(StatesGroup):
+    waiting_for_photo = State()
 
 
 # ================= Робота з базою даних =================
@@ -59,7 +66,6 @@ def get_user_data(user_id: int):
         }
         save_db(db)
     else:
-        # Перевірка на новий день для безкоштовних генерацій
         user_data = db[user_id_str]
         if user_data.get("last_date") != today_str:
             user_data["daily_count"] = 0
@@ -112,32 +118,23 @@ def use_generation(user_id: int):
 
     user_data = db[user_id_str]
 
-    # Оновлення дня якщо змінився
     if user_data.get("last_date") != today_str:
         user_data["daily_count"] = 0
         user_data["last_date"] = today_str
 
-    # Якщо адмін — не витрачаємо нічого
     if user_id == ADMIN_ID:
         return True, "admin", user_data["credits"]
 
-    # 1. Спочатку перевіряємо безкоштовні щоденні ліміти
     if user_data["daily_count"] < DAILY_FREE_LIMIT:
         user_data["daily_count"] += 1
         save_db(db)
-        return (
-            True,
-            "free",
-            DAILY_FREE_LIMIT - user_data["daily_count"],
-        )  # скільки залишилось безкоштовних
+        return True, "free", DAILY_FREE_LIMIT - user_data["daily_count"]
 
-    # 2. Якщо безкоштовні закінчилися, перевіряємо кредити
     if user_data["credits"] > 0:
         user_data["credits"] -= 1
         save_db(db)
         return True, "credit", user_data["credits"]
 
-    # 3. Якщо нічого немає
     return False, "none", 0
 
 
@@ -149,11 +146,36 @@ def main_keyboard():
             KeyboardButton(text="🛒 Магазин зірок"),
         ],
         [
-            KeyboardButton(text="⚙️ Послуги / Функції"),
+            KeyboardButton(text="🎨 Створити фото"),
+            KeyboardButton(text="⚙️ Послуги"),
+        ],
+        [
             KeyboardButton(text="ℹ️ Допомога"),
         ],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def photo_type_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="👤 Стильна Аватарка", callback_data="type_avatar"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🖼️ Заставка / Шпалери", callback_data="type_wallpaper"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✨ Художнє фото", callback_data="type_art"
+                )
+            ],
+        ]
+    )
 
 
 def shop_keyboard():
@@ -181,6 +203,19 @@ def shop_keyboard():
     )
 
 
+def user_result_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⚠️ Брак (повернути спробу)",
+                    callback_data="user_report_defect",
+                )
+            ]
+        ]
+    )
+
+
 # ================= Хендлери =================
 
 @dp.message(CommandStart())
@@ -189,8 +224,8 @@ async def cmd_start(message: Message):
     text = (
         f"Привіт, {message.from_user.first_name}! 👋\n\n"
         f"🤖 Ласкаво просимо до бота!\n"
-        f"🎁 Кожен день вам доступно **{DAILY_FREE_LIMIT} безкоштовних генерацій фото**.\n"
-        f"Обирай необхідні розділи в меню нижче."
+        f"🎁 Кожен день вам доступно **{DAILY_FREE_LIMIT} безкоштовних генерацій**.\n"
+        f"Обирайте стиль або тисніть «🎨 Створити фото»."
     )
     await message.answer(text, reply_markup=main_keyboard(), parse_mode="Markdown")
 
@@ -225,25 +260,46 @@ async def cmd_profile(message: Message):
     await message.answer(profile_text, parse_mode="Markdown")
 
 
+@dp.message(F.text == "🎨 Створити фото")
+@dp.message(F.text == "⚙️ Послуги")
+async def cmd_choose_type(message: Message):
+    await message.answer(
+        "📸 **Оберіть вид генерації:**\n\n"
+        "1️⃣ **Стильна Аватарка** — ідеальні пропорції та чітке обличчя.\n"
+        "2️⃣ **Заставка / Шпалери** — висока деталізація для робочого столу або телефону.\n"
+        "3️⃣ **Художнє фото** — креативний стиль.",
+        reply_markup=photo_type_keyboard(),
+        parse_mode="Markdown",
+    )
+
+
+@dp.callback_query(F.data.startswith("type_"))
+async def process_type_selection(callback: types.CallbackQuery, state: FSMContext):
+    photo_type = callback.data.replace("type_", "")
+    type_names = {
+        "avatar": "Стильна Аватарка",
+        "wallpaper": "Заставка / Шпалери",
+        "art": "Художнє фото",
+    }
+    selected_name = type_names.get(photo_type, "Стандартне фото")
+    await state.update_data(photo_type=selected_name)
+    await state.set_state(PhotoGenerationState.waiting_for_photo)
+
+    await callback.message.edit_text(
+        f"🎯 Обрано стиль: **{selected_name}**\n\n"
+        f"Тепер надішліть фотографію сюди в чат:",
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
 @dp.message(Command("shop", "buy"))
 @dp.message(F.text == "🛒 Магазин зірок")
 async def cmd_shop(message: Message):
     await message.answer(
         "🛒 **Магазин покупок за Telegram Stars (XTR)**\n\n"
-        "Оберіть потрібний пакет. Оплата проходить миттєво й абсолютно безпечно:",
+        "Оберіть потрібний пакет. Оплата проходить миттєво й безпечно:",
         reply_markup=shop_keyboard(),
-        parse_mode="Markdown",
-    )
-
-
-@dp.message(F.text == "⚙️ Послуги / Функції")
-async def cmd_services(message: Message):
-    user_data = get_user_data(message.from_user.id)
-    await message.answer(
-        f"⚙️ **Функція обробки фото:**\n\n"
-        f"Просто надішліть фото сюди в чат.\n"
-        f"🎁 Щоденні безкоштовні спроби: **{max(0, DAILY_FREE_LIMIT - user_data.get('daily_count', 0))}**\n"
-        f"💎 Ваші кредити: **{user_data['credits']}**",
         parse_mode="Markdown",
     )
 
@@ -252,21 +308,21 @@ async def cmd_services(message: Message):
 async def cmd_help(message: Message):
     await message.answer(
         "ℹ️ **Довідка:**\n\n"
-        f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня (оновлюються опівночі).\n"
-        "• Коли безкоштовні спроби закінчуються, витрачаються куплені кредити.\n"
-        "• Оплата пакетів здійснюється за допомогою Telegram Stars (XTR).\n"
-        "• Усі результати перевіряються, у разі помилки адміністратор повертає спроби.",
+        f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
+        "• Можна вибирати між стилями: Аватарка, Заставка, Художнє фото.\n"
+        "• Якщо згенероване фото виявилось некоректним, натисніть кнопку **«⚠️ Брак»** під фото — адміністратор розгляне заявку та поверне спробу.",
         parse_mode="Markdown",
     )
 
 
-# ================= Обробка фото та модерація =================
+# ================= Обробка фото =================
 
 @dp.message(F.photo)
-async def process_user_photo(message: Message):
+async def process_user_photo(message: Message, state: FSMContext):
     user_id = message.from_user.id
+    state_data = await state.get_data()
+    style_name = state_data.get("photo_type", "Загальний стиль")
 
-    # Використовуємо спробу (безкоштовну чи платну)
     success, source_type, remainder = use_generation(user_id)
 
     if not success:
@@ -276,83 +332,112 @@ async def process_user_photo(message: Message):
         )
         return
 
-    # Формуємо інформацію про те, як була витрачена спроба
     if source_type == "admin":
-        info_text = "👑 [Адмін-режим: нескінченні генерації]"
+        info_text = "👑 [Адмін-режим: безліміт]"
     elif source_type == "free":
         info_text = f"🎁 Безкоштовна спроба (залишилось на сьогодні: {remainder})"
     else:
-        info_text = f"💎 Витрачено 1 кредит (залишок кредитів: {remainder})"
+        info_text = f"💎 Витрачено 1 кредит (залишок: {remainder})"
 
     photo_file_id = message.photo[-1].file_id
 
-    await message.answer(
-        f"📸 Ваше фото прийнято в роботу!\n{info_text}"
+    await message.answer(f"📸 Ваше фото обробляється ({style_name})...\n{info_text}")
+    
+    await message.answer_photo(
+        photo_file_id,
+        caption=f"✨ **Готово!** Стиль: _{style_name}_\n\nЯкщо результатом незадоволені, натисніть кнопку нижче:",
+        reply_markup=user_result_keyboard(),
+        parse_mode="Markdown",
     )
-    await message.answer_photo(photo_file_id, caption="✨ Ось ваш результат!")
 
-    # Кнопки для модератора/адміна
+    await state.clear()
+
+
+# ================= Повідомлення про Брак від юзера =================
+
+@dp.callback_query(F.data == "user_report_defect")
+async def process_user_defect_report(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    photo_file_id = callback.message.photo[-1].file_id if callback.message.photo else None
+
+    await callback.answer("📩 Заявка про брак надіслана адміністратору!", show_alert=True)
+    await callback.message.edit_caption(
+        caption=callback.message.caption + "\n\n⏳ **Заявку про брак відправлено на перевірку адміну.**",
+        parse_mode="Markdown",
+    )
+
     admin_kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Все добре", callback_data=f"mod_ok_{user_id}"
+                    text="🔄 Повернути спробу / кредит",
+                    callback_data=f"mod_refund_{user_id}",
                 ),
                 InlineKeyboardButton(
-                    text="🔄 Повернути спробу/кредит",
-                    callback_data=f"mod_refund_{user_id}",
+                    text="❌ Відхилити",
+                    callback_data=f"mod_reject_{user_id}",
                 ),
             ]
         ]
     )
 
     try:
-        await bot.send_photo(
-            ADMIN_ID,
-            photo=photo_file_id,
-            caption=(
-                f"📊 **Нове фото від користувача!**\n\n"
-                f"👤 Юзер: @{message.from_user.username or 'немає'} (ID: `{user_id}`)\n"
-                f"ℹ️ Тип генерації: **{source_type}**\n\n"
-                f"Оцініть якість:"
-            ),
-            reply_markup=admin_kb,
-            parse_mode="Markdown",
+        caption_text = (
+            f"⚠️ **Скарги на брак від користувача!**\n\n"
+            f"👤 Користувач: @{callback.from_user.username or 'немає'} (ID: `{user_id}`)\n"
+            f"Перевірте фото та поверніть спробу за потреби:"
         )
-    except Exception:
-        pass
 
+        if photo_file_id:
+            await bot.send_photo(
+                ADMIN_ID,
+                photo=photo_file_id,
+                caption=caption_text,
+                reply_markup=admin_kb,
+                parse_mode="Markdown",
+            )
+        else:
+            await bot.send_message(
+                ADMIN_ID,
+                text=caption_text,
+                reply_markup=admin_kb,
+                parse_mode="Markdown",
+            )
+    except Exception as e:
+        print(f"Помилка відправки адміну: {e}")
+
+
+# ================= Колбеки модератора =================
 
 @dp.callback_query(F.data.startswith("mod_"))
 async def process_moderation(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ У вас немає прав модератора.", show_alert=True)
+        await callback.answer("❌ Немає прав.", show_alert=True)
         return
 
     data = callback.data.split("_")
     action = data[1]
     target_user_id = int(data[2])
 
-    if action == "ok":
+    if action == "reject":
         await callback.message.edit_caption(
-            caption=callback.message.caption + "\n\n✅ **Прийнято.**",
+            caption=callback.message.caption + "\n\n❌ **Скаргу відхилено.**",
             parse_mode="Markdown",
         )
-        await callback.answer("Збережено!")
+        await callback.answer("Відхилено.")
 
     elif action == "refund":
-        # Повертаємо 1 кредит або даємо додаткову спробу (зменшуємо ліміт використаних за день)
         db = load_db()
         user_id_str = str(target_user_id)
         if user_id_str in db:
             if db[user_id_str].get("daily_count", 0) > 0:
-                db[user_id_str]["daily_count"] -= 1  # відновлюємо безкоштовну спробу
+                db[user_id_str]["daily_count"] -= 1
             else:
-                db[user_id_str]["credits"] += 1  # або повертаємо кредит
+                db[user_id_str]["credits"] += 1
             save_db(db)
 
         await callback.message.edit_caption(
-            caption=callback.message.caption + "\n\n🔄 **Спробу/кредит повернуто користувачу.**",
+            caption=callback.message.caption + "\n\n✅ **Спробу/кредит повернуто користувачеві.**",
             parse_mode="Markdown",
         )
         await callback.answer("Компенсацію надано!")
@@ -360,8 +445,7 @@ async def process_moderation(callback: types.CallbackQuery):
         try:
             await bot.send_message(
                 target_user_id,
-                "🎁 **Компенсація від адміністратора!**\n"
-                "Ваша остання генерація була перевірена, і вам повернуто спробу/кредит на баланс.",
+                "🎁 **Компенсація!**\nВашу скаргу на брак розглянуто. Вам повернено 1 спробу/кредит на баланс.",
             )
         except Exception:
             pass
@@ -451,7 +535,7 @@ async def process_successful_payment(message: Message):
         pass
 
 
-# ================= Нові Адмін-команди =================
+# ================= Адмін-команди =================
 
 @dp.message(Command("stats"))
 async def cmd_stats(message: Message):
@@ -459,8 +543,7 @@ async def cmd_stats(message: Message):
         db = load_db()
         total_users = len(db)
         await message.answer(
-            f"📊 **Статистика бота:**\n\n"
-            f"👥 Всього користувачів у базі: **{total_users}**",
+            f"📊 **Статистика бота:**\n\n👥 Всього користувачів у базі: **{total_users}**",
             parse_mode="Markdown",
         )
     else:
@@ -479,7 +562,7 @@ async def cmd_add_credits(message: Message):
                 target_user_id, credits_to_add=credits_amount
             )
             await message.answer(
-                f"✅ Нараховано **{credits_amount}** кредитів користувачу `{target_user_id}`."
+                f"✅ Нараховано **{credits_amount}** кредитів юзеру `{target_user_id}`."
             )
 
             try:
