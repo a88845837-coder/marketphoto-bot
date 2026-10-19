@@ -257,4 +257,58 @@ async def process_successful_payment(message: Message):
         user_data = update_user_purchase(
             user_id, credits_to_add=50, stars_spent=stars, days_sub=30
         )
-        msg_text = f"👑 **VIP Підписку активовано!**\n\n📅 Термін: **30 днів**\n➕ Додано: **
+        msg_text = (
+            "👑 **VIP Підписку активовано!**\n\n"
+            "📅 Термін: **30 днів**\n"
+            "➕ Додано: **50 бонусних кредитів**"
+        )
+
+    await message.answer(msg_text, parse_mode="Markdown")
+
+    try:
+        await bot.send_message(
+            ADMIN_ID,
+            f"🔔 **Нова оплата зірками!**\n\n"
+            f"Користувач: @{message.from_user.username or 'немає'} (ID: `{user_id}`)\n"
+            f"Сума: **{stars} Stars (XTR)**\n"
+            f"Товар: `{payload}`",
+            parse_mode="Markdown",
+        )
+    except Exception:
+        pass
+
+
+@dp.message(Command("stop"))
+async def cmd_stop(message: Message):
+    if message.from_user.id == ADMIN_ID:
+        await message.answer("🛑 Бот зупинений.")
+        await dp.stop_polling()
+    else:
+        await message.answer("❌ У вас немає прав на цю команду.")
+
+
+# ================= Вебсервер для задоволення Render =================
+async def handle_ping(request):
+    return web.Response(text="Bot is running!")
+
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"🌐 Вебсервер запущено на порту {port}")
+
+
+# ================= Запуск =================
+async def main():
+    await start_web_server()
+    print("🚀 Бот успішно запущений і працює!")
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
