@@ -10,44 +10,66 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
+# Розширений словник для миттєвого й ідеального перекладу
+smart_dictionary = {
+    "стакан води": "a crystal clear glass filled with pure fresh water",
+    "вода": "a glass of pure water",
+    "стакан": "transparent empty drinking glass",
+    "склянка": "transparent drinking glass",
+    "гроші": "stack of hundred dollar bills",
+    "грошей": "stack of hundred dollar bills",
+    "доллари": "stack of hundred dollar bills",
+    "долари": "stack of hundred dollar bills",
+    "готівка": "neat stack of dollar banknotes",
+    "банан": "single fresh yellow banana",
+    "банани": "bunch of fresh yellow bananas",
+    "годинник": "luxury Swiss wristwatch",
+    "кросівки": "stylish modern sports sneakers",
+    "футболка": "blank premium white cotton t-shirt",
+    "кава": "ceramic cup of hot fresh espresso coffee",
+    "чай": "ceramic cup of hot green tea",
+    "чашка": "ceramic coffee mug",
+    "парфуми": "luxury perfume bottle",
+    "телефон": "modern flagship smartphone",
+    "смартфон": "modern flagship smartphone",
+    "навушники": "wireless over-ear headphones",
+    "окуляри": "stylish sunglasses",
+    "сумка": "leather luxury handbag",
+}
+
 
 def translate_to_english(ukr_text):
   lower_text = ukr_text.lower().strip()
 
-  # Точний словник для предметів, щоб уникнути помилок і людей
-  safety_map = {
-      "гроші": "stack of hundred dollar bills",
-      "грошей": "stack of hundred dollar bills",
-      "доллари": "stack of hundred dollar bills",
-      "долари": "stack of hundred dollar bills",
-      "готівка": "stack of dollar banknotes",
-      "валюта": "stack of dollar banknotes",
-      "банан": "single fresh yellow banana",
-      "банани": "fresh yellow bananas",
-      "годинник": "luxury wristwatch",
-      "кросівки": "pair of modern sneakers",
-      "футболка": "blank white t-shirt",
-      "кава": "ceramic cup of hot fresh espresso coffee",
-      "чай": "ceramic cup of hot green tea",
-      "чашка": "ceramic coffee mug",
-  }
+  # 1. Шукаємо точний збіг у словнику
+  if lower_text in smart_dictionary:
+    return smart_dictionary[lower_text]
 
-  for key, val in safety_map.items():
+  # Шукаємо частковий збіг
+  for key, val in smart_dictionary.items():
     if key in lower_text:
       return val
 
+  # 2. Якщо немає в словнику — робимо запит до перекладача
   try:
     url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(ukr_text)}&langpair=uk|en"
-    response = requests.get(url, timeout=5)
+    response = requests.get(url, timeout=8)
     if response.status_code == 200:
       data = response.json()
       translated = data.get("responseData", {}).get("translatedText", "")
-      if translated and not translated.startswith("MYMEMORY"):
+      if (
+          translated
+          and not translated.startswith("MYMEMORY")
+          and not any(ord(c) > 127 for c in translated)
+      ):
         return translated.strip()
   except Exception as e:
     print(f"Помилка перекладу: {e}")
 
-  return ukr_text
+  # 3. Захисний фолбек, якщо переклад не вдався
+  return (
+      f"high-end commercial product of {ukr_text}, premium advertising shot"
+  )
 
 
 def get_universal_prompt(user_text):
@@ -57,13 +79,13 @@ def get_universal_prompt(user_text):
       f" '{translated_subject}'"
   )
 
-  # Суворий комерційний промпт з жорстокою забороною людей і облич
+  # Професійний рекламний промпт для ідеальної якості
   return (
-      f"Commercial product photography of a single inanimate object:"
-      f" {translated_subject}, isolated on a clean pure seamless white"
-      " background, studio lighting, professional e-commerce catalog shot,"
-      " macro details, ABSOLUTELY NO humans, NO faces, NO people, NO hands,"
-      " product only"
+      f"Commercial advertising product photography of {translated_subject},"
+      " studio softbox lighting, cinematic sharp focus, hyper-realistic"
+      " textures, isolated on a clean pure seamless white background, 8k"
+      " resolution, high-end e-commerce catalog style, professional studio"
+      " setup, ABSOLUTELY NO humans, NO faces, NO people, NO hands"
   )
 
 
@@ -88,8 +110,9 @@ def send_welcome(message):
   bot.reply_to(
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
-      "✨ Надішли мені назву будь-якого товару (наприклад: *кава*, *банан*,"
-      " *гроші*), і я згенерую лише предмет на білому фоні без людей! 🚀",
+      "✨ Я створюю ідеальні професійні фото будь-яких товарів.\n\n"
+      "💬 Надішли назву товару (наприклад: *стакан води*, *кава*, *кросівки*),"
+      " і я зроблю бездоганне фото! 🚀",
   )
 
 
@@ -101,8 +124,8 @@ def cmd_generate(message):
   else:
     bot.reply_to(
         message,
-        "🎨 Напишіть опис товару після команди, наприклад: `/generate кава`"
-        " або просто текстом!",
+        "🎨 Напишіть назву товару після команди, наприклад: `/generate стакан"
+        " води` або просто текстом!",
     )
 
 
@@ -117,12 +140,14 @@ def generate_and_send_photo(message, user_text):
   print(f"Запит на генерацію: {user_text}")
   bot.send_chat_action(message.chat.id, "upload_photo")
 
-  wait_msg = bot.reply_to(message, "⏳ **Малюю товар без людей...** Зачекайте 🎨")
+  wait_msg = bot.reply_to(
+      message, "⏳ **Створюю ідеальне фото товару...** Зачекайте 🎨"
+  )
 
   image_prompt = get_universal_prompt(user_text)
   print(f"Фінальний промпт: {image_prompt}")
 
-  image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&seed=456&nologo=true"
+  image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&nologo=true"
 
   headers = {
       "User-Agent": (
@@ -132,7 +157,7 @@ def generate_and_send_photo(message, user_text):
   }
 
   try:
-    img_response = requests.get(image_url, headers=headers, timeout=90)
+    img_response = requests.get(image_url, headers=headers, timeout=120)
 
     if img_response.status_code == 200:
       photo_file = io.BytesIO(img_response.content)
@@ -147,7 +172,7 @@ def generate_and_send_photo(message, user_text):
           message.chat.id,
           photo_file,
           caption=(
-              "✨ **Готово! Професійне фото товару (без людей)** 📸🔥"
+              "✨ **Готово! Професійне студійне фото створено** 📸🔥"
           ),
           parse_mode="Markdown",
       )
