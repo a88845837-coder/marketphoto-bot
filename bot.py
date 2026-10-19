@@ -1,469 +1,90 @@
-import datetime
-import io
+from aiogram import Bot, Dispatcher, F, types
+from aiogram.filters import Command
+from aiogram.types import LabeledPrice, PreCheckoutQuery, Message
 import json
 import os
-import time
-import urllib.parse
-from flask import Flask, request
-import requests
-import telebot
-from telebot import types
 
-TOKEN = "8616836203:AAHnB70MrjS6275-bH4ON8_NR1tVGb4gm0E"
-bot = telebot.TeleBot(TOKEN)
+BOT_TOKEN = "ТВІЙ_ТОКЕН_БОТА"  # Твій токен
+ADMIN_ID = 5694967765        # Твій Admin ID
 
-app = Flask("")
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
 
-# 📌 Ваш головний адмін-акаунт (куди надходять заявки на перевірку)
-ADMIN_ID = 5694967765
+DB_FILE = "users_db.json"
 
-# 📌 Ваш номер картки для оплати
-CARD_NUMBER = "4874 0700 7067 8378"
-DATA_FILE = "users_db.json"
-
-
+# Функції для роботи з базою даних
 def load_db():
-  if os.path.exists(DATA_FILE):
+    if not os.path.exists(DB_FILE):
+        return {}
     try:
-      with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-    except:
-      pass
-  return {}
-
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return {}
 
 def save_db(data):
-  with open(DATA_FILE, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=4)
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+def add_credits(user_id: int, amount: int):
+    db = load_db()
+    user_id_str = str(user_id)
+    if user_id_str not in db:
+        db[user_id_str] = {"credits": 0}
+    db[user_id_str]["credits"] += amount
+    save_db(db)
+    return db[user_id_str]["credits"]
 
 
-def get_user_data(user_id):
-  db = load_db()
-  str_id = str(user_id)
-  today = str(datetime.date.today())
+# Команда /buy — покупка кредитів виключно за Telegram Stars
+@dp.message(Command("buy"))
+async def cmd_buy(message: types.Message):
+    # Наприклад: 100 кредитів коштують 50 Telegram Stars (XTR)
+    prices = [LabeledPrice(label="100 Кредитів", amount=50)]
 
-  if str_id not in db:
-    db[str_id] = {"credits": 15, "last_date": today, "is_pro": False}
-  else:
-    if db[str_id].get("last_date") != today:
-      if not db[str_id].get("is_pro", False):
-        db[str_id]["credits"] = 15
-      db[str_id]["last_date"] = today
-
-  save_db(db)
-  return db[str_id]
-
-
-def add_credits_to_user(user_id, amount):
-  db = load_db()
-  str_id = str(user_id)
-  today = str(datetime.date.today())
-
-  if str_id not in db:
-    db[str_id] = {"credits": 15, "last_date": today, "is_pro": False}
-
-  db[str_id]["credits"] += amount
-  save_db(db)
-  print(f"✅ Успішно додано {amount} кредитів для користувача {user_id}. Баланс: {db[str_id]['credits']}")
-
-
-def set_user_pro_status(user_id, is_pro=True):
-  db = load_db()
-  str_id = str(user_id)
-  today = str(datetime.date.today())
-
-  if str_id not in db:
-    db[str_id] = {"credits": 15, "last_date": today, "is_pro": False}
-
-  db[str_id]["is_pro"] = is_pro
-  if is_pro:
-    db[str_id]["credits"] = 9999
-  save_db(db)
-  print(f"✅ PRO статус встановлено для користувача {user_id}")
-
-
-# Словник для швидкого перекладу
-smart_dictionary = {
-    "стакан води": "a crystal clear glass filled with pure fresh water",
-    "вода": "a glass of pure water",
-    "гроші": "stack of hundred dollar bills",
-    "долари": "stack of hundred dollar bills",
-    "банан": "single fresh yellow banana",
-    "годинник": "luxury Swiss wristwatch",
-    "кросівки": "stylish modern sports sneakers",
-    "футболка": "blank premium white cotton t-shirt",
-    "кава": "ceramic cup of hot fresh espresso coffee",
-}
-
-
-def translate_to_english(ukr_text):
-  lower_text = ukr_text.lower().strip()
-  if lower_text in smart_dictionary:
-    return smart_dictionary[lower_text]
-  for key, val in smart_dictionary.items():
-    if key in lower_text:
-      return val
-
-  try:
-    url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(ukr_text)}&langpair=uk|en"
-    response = requests.get(url, timeout=8)
-    if response.status_code == 200:
-      data = response.json()
-      translated = data.get("responseData", {}).get("translatedText", "")
-      if (
-          translated
-          and not translated.startswith("MYMEMORY")
-          and not any(ord(c) > 127 for c in translated)
-      ):
-        return translated.strip()
-  except Exception as e:
-    print(f"Помилка перекладу: {e}")
-
-  return f"high-end commercial product of {ukr_text}, premium advertising shot"
-
-
-def get_universal_prompt(user_text, style="standard"):
-  translated_subject = translate_to_english(user_text)
-  return (
-      f"Commercial advertising product photography of {translated_subject},"
-      " isolated on a clean pure seamless white background, studio softbox"
-      " lighting, cinematic sharp focus, hyper-realistic textures, 8k"
-      " resolution, high-end e-commerce catalog style, ABSOLUTELY NO humans, NO"
-      " faces, NO people, NO hands"
-  )
-
-
-@app.route("/")
-def home():
-  return "MarketPhoto AI Bot is running 24/7! 🚀"
-
-
-@app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
-  if request.headers.get("content-type") == "application/json":
-    json_string = request.get_data().decode("utf-8")
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "", 200
-  else:
-    return "Invalid content type", 403
-
-
-# --- КОМАНДИ МЕНЮ ---
-
-
-@bot.message_handler(commands=["start"])
-def cmd_start(message):
-  user = get_user_data(message.from_user.id)
-  bot.reply_to(
-      message,
-      "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
-      f"🎁 Ваш баланс: **{user['credits']} кредитів**.\n"
-      "📌 Використовуйте меню або команди:\n"
-      "• `/generate <товар>` — створити фото\n"
-      "• `/profile` — баланс\n"
-      "• `/styles` — стилі\n"
-      "• `/buy` — купити кредити / PRO",
-      parse_mode="Markdown",
-  )
-
-
-@bot.message_handler(commands=["help"])
-def cmd_help(message):
-  bot.reply_to(
-      message,
-      "📖 **Довідка MarketPhoto AI**\n\nНапишіть назву товару, і бот створить"
-      " студійне фото у високій якості 8k без людей. 1 генерація = 5 кредитів.",
-      parse_mode="Markdown",
-  )
-
-
-@bot.message_handler(commands=["styles"])
-def cmd_styles(message):
-  markup = types.InlineKeyboardMarkup()
-  markup.add(
-      types.InlineKeyboardButton("⚪ Білий фон (Стандарт)", callback_data="style_standard")
-  )
-  markup.add(
-      types.InlineKeyboardButton("⚫ Преміум Люкс", callback_data="style_luxury")
-  )
-  markup.add(
-      types.InlineKeyboardButton("✨ Мінімалізм", callback_data="style_minimal")
-  )
-  bot.reply_to(
-      message,
-      "🎨 **Оберіть стиль зйомки:**",
-      reply_markup=markup,
-      parse_mode="Markdown",
-  )
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("style_"))
-def callback_styles(call):
-  style_name = call.data.replace("style_", "")
-  bot.answer_callback_query(call.id, f"✅ Стиль змінено на: {style_name}")
-  bot.edit_message_text(
-      f"✅ **Стиль встановлено:** `{style_name.upper()}`",
-      call.message.chat.id,
-      call.message.message_id,
-      parse_mode="Markdown",
-  )
-
-
-@bot.message_handler(commands=["profile"])
-def cmd_profile(message):
-  user = get_user_data(message.from_user.id)
-  status = "PRO (Безліміт) ⭐" if user.get("is_pro") else "Стандартний 🟢"
-  bot.reply_to(
-      message,
-      "👤 **Особистий кабінет**\n\n"
-      f"🆔 ID: `{message.from_user.id}`\n"
-      f"💎 Кредити: **{user['credits']}**\n"
-      f"📦 Статус: **{status}**",
-      parse_mode="Markdown",
-  )
-
-
-@bot.message_handler(commands=["buy"])
-def cmd_buy(message):
-  user_id = message.from_user.id
-
-  markup = types.InlineKeyboardMarkup()
-  markup.add(
-      types.InlineKeyboardButton(
-          "✅ Я оплатив 50 кредитів (55 грн)", callback_data="claim_50"
-      )
-  )
-  markup.add(
-      types.InlineKeyboardButton("⭐ Я оплатив PRO (199 грн)", callback_data="claim_pro")
-  )
-
-  bot.reply_to(
-      message,
-      "🛒 **Магазин підписок та кредитів**\n\n"
-      "💳 **Номер картки для оплати:**\n"
-      f"`{CARD_NUMBER}`\n\n"
-      "1. Скопіюйте номер картки вище та зробіть переказ у своєму додатку банку.\n"
-      f"2. У коментарі до платежу обов'язково вкажіть ваш ID: `{user_id}`\n"
-      "3. Після переказу натисніть кнопку підтвердження нижче! 🚀",
-      reply_markup=markup,
-      parse_mode="Markdown",
-  )
-
-
-# --- ЗАПИТ НА ПІДТВЕРДЖЕННЯ ОПЛАТИ ---
-
-
-@bot.callback_query_handler(func=lambda call: call.data in ["claim_50", "claim_pro"])
-def callback_claim_payment(call):
-  user_id = call.from_user.id
-  username = f"@{call.from_user.username}" if call.from_user.username else "Без username"
-  pack_name = "+50 Кредитів (55 грн)" if call.data == "claim_50" else "PRO Підписка (199 грн)"
-
-  bot.answer_callback_query(
-      call.id,
-      "⏳ Запит надіслано адміністратору! Очікуйте перевірки.",
-      show_alert=True,
-  )
-  bot.send_message(
-      call.message.chat.id,
-      "⏳ **Запит на перевірку надіслано!** Адміністратор перевірить надходження коштів і підтвердить платіж найближчим часом.",
-      parse_mode="Markdown",
-  )
-
-  # Формуємо кнопки для адміна, куди чітко зашиваємо ID того, хто купив (user_id)
-  admin_markup = types.InlineKeyboardMarkup()
-  admin_markup.add(
-      types.InlineKeyboardButton(
-          "✅ Підтвердити", callback_data=f"appr_{call.data}_{user_id}"
-      ),
-      types.InlineKeyboardButton(
-          "❌ Відхилити", callback_data=f"decl_{user_id}"
-      ),
-  )
-
-  try:
-    bot.send_message(
-        ADMIN_ID,
-        "💰 **НОВА ЗАЯВКА НА ОПЛАТУ!**\n\n"
-        f"👤 Користувач: {username}\n"
-        f"🆔 ID покупця: `{user_id}`\n"
-        f"📦 Товар: **{pack_name}**\n\n"
-        "Перевірте свій додаток банку і натисніть кнопку нижче:",
-        reply_markup=admin_markup,
-        parse_mode="Markdown",
-    )
-    print(f"🔔 Заявку від клієнта {user_id} успішно надіслано адміну ({ADMIN_ID})")
-  except Exception as e:
-    print(f"❌ Помилка надсилання сповіщення адміну: {e}")
-
-
-@bot.callback_query_handler(
-    func=lambda call: call.data.startswith("appr_") or call.data.startswith("decl_")
-)
-def callback_admin_action(call):
-  # Перевіряємо, чи на кнопку тисне саме адміністратор (ADMIN_ID)
-  if call.from_user.id != ADMIN_ID:
-    bot.answer_callback_query(call.id, "❌ Ви не адміністратор!", show_alert=True)
-    return
-
-  parts = call.data.split("_")
-  action = parts[0]
-
-  if action == "appr":
-    pack_type = parts[1]
-    target_user_id = int(parts[3])  # Отримуємо реальний ID покупця з кнопки
-
-    if pack_type == "claim_50":
-      add_credits_to_user(target_user_id, 50)
-      msg_text = "🎉 **Вашу оплату підтверджено!** Нараховано +50 кредитів. 💎"
-    else:
-      set_user_pro_status(target_user_id, True)
-      msg_text = "⭐ **Вашу оплату підтверджено!** PRO-підписку активовано. 🚀"
-
-    # Надсилаємо покупцю сповіщення в його чат
-    try:
-      bot.send_message(target_user_id, msg_text, parse_mode="Markdown")
-      print(f"✅ Повідомлення про успіх доставлено покупцю {target_user_id}")
-    except Exception as e:
-      print(f"❌ Не вдалось надіслати повідомлення покупцю {target_user_id}: {e}")
-
-    bot.edit_message_text(
-        f"✅ **УСПІШНО ПІДТВЕРДЖЕНО** для покупця з ID `{target_user_id}`!",
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode="Markdown",
-    )
-
-  elif action == "decl":
-    target_user_id = int(parts[1])
-    try:
-      bot.send_message(
-          target_user_id,
-          "❌ **Оплату не знайдено.** Перевірте, чи ви переказали кошти та вказали правильний ID у коментарі.",
-          parse_mode="Markdown",
-      )
-    except:
-      pass
-
-    bot.edit_message_text(
-        f"❌ **ВІДХИЛЕНО** для покупця з ID `{target_user_id}`.",
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode="Markdown",
+    await bot.send_invoice(
+        chat_id=message.chat.id,
+        title="Купівля кредитів",
+        description="Отримайте 100 кредитів для використання функцій бота.",
+        payload="buy_100_credits",
+        provider_token="",          # Для Telegram Stars поле завжди залишається порожнім!
+        currency="XTR",             # Офіційна валюта Telegram Stars
+        prices=prices,
+        start_parameter="buy-credits"
     )
 
 
-# --- ГЕНЕРАЦІЯ ФОТО ---
+# Етап перевірки перед оплатою (обов'язковий крок)
+@dp.pre_checkout_query()
+async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
 
-@bot.message_handler(commands=["generate"])
-def cmd_generate(message):
-  text = message.text.replace("/generate", "").strip()
-  if text:
-    process_generation(message, text)
-  else:
-    bot.reply_to(
-        message,
-        "🎨 Напишіть назву товару після команди, наприклад: `/generate кросівки`",
-        parse_mode="Markdown",
-    )
-
-
-@bot.message_handler(
-    func=lambda message: message.text and not message.text.startswith("/")
-)
-def handle_message(message):
-  process_generation(message, message.text)
-
-
-def process_generation(message, user_text):
-  user_id = message.from_user.id
-  user = get_user_data(user_id)
-
-  if not user.get("is_pro", False) and user["credits"] < 5:
-    bot.reply_to(
-        message,
-        "❌ **Недостатньо кредитів!**\nДля генерації потрібно 5 кредитів."
-        " Скористайтеся `/buy`, щоб придбати пакети.",
-        parse_mode="Markdown",
-    )
-    return
-
-  bot.send_chat_action(message.chat.id, "upload_photo")
-  wait_msg = bot.reply_to(message, "⏳ **Генерую фото... [25%]**")
-  time.sleep(0.5)
-  try:
-    bot.edit_message_text(
-        "⏳ **Генерую фото... [50%]**", message.chat.id, wait_msg.message_id
-    )
-  except:
-    pass
-
-  image_prompt = get_universal_prompt(user_text)
-  time.sleep(0.5)
-  try:
-    bot.edit_message_text(
-        "⏳ **Генерую фото... [75%]**", message.chat.id, wait_msg.message_id
-    )
-  except:
-    pass
-
-  image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&nologo=true"
-  headers = {
-      "User-Agent": (
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
-          " like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      )
-  }
-
-  try:
-    img_response = requests.get(image_url, headers=headers, timeout=120)
-    if img_response.status_code == 200:
-      if not user.get("is_pro", False):
-        db = load_db()
-        str_id = str(user_id)
-        if str_id in db:
-          db[str_id]["credits"] -= 5
-          save_db(db)
-        credits_left = get_user_data(user_id)["credits"]
-      else:
-        credits_left = "Безліміт ⭐"
-
-      photo_file = io.BytesIO(img_response.content)
-      photo_file.name = "product_photo.jpg"
-
-      try:
-        bot.delete_message(message.chat.id, wait_msg.message_id)
-      except:
-        pass
-
-      bot.send_photo(
-          message.chat.id,
-          photo_file,
-          caption=(
-              "✨ **[100%] Готово! Професійне фото створено** 📸🔥\n\n"
-              f"💳 Списано: 5 кредитів | Залишок: **{credits_left}**"
-          ),
-          parse_mode="Markdown",
-      )
-    else:
-      bot.edit_message_text(
-          "❌ Помилка генерації. Спробуйте ще раз!",
-          message.chat.id,
-          wait_msg.message_id,
-      )
-  except Exception as e:
-    print(f"Помилка: {e}")
+# Етап успішної оплати зірками — автоматичне зарахування кредитів
+@dp.message(F.successful_payment)
+async def process_successful_payment(message: Message):
+    payment_info = message.successful_payment
+    
+    if payment_info.invoice_payload == "buy_100_credits":
+        added_credits = 100
+        new_balance = add_credits(message.from_user.id, added_credits)
+        
+        # Повідомлення користувачу
+        await message.answer(
+            f"🎉 **Оплата пройшла успішно!**\n\n"
+            f"➕ Нараховано: **{added_credits} кредитів**\n"
+            f"💰 Ваш новий баланс: **{new_balance} кредитів**"
+        )
+        
+        # Повідомлення тобі як адміну про покупку
+        await bot.send_message(
+            ADMIN_ID, 
+            f"🔔 Нова покупка у боті!\n"
+            f"Користувач: @{message.from_user.username} (ID: `{message.from_user.id}`)\n"
+            f"Купив: 100 кредитів за {payment_info.total_amount} Stars."
+        )
 
 
 if __name__ == "__main__":
-  render_url = os.environ.get("RENDER_EXTERNAL_URL")
-  if render_url:
-    webhook_url = f"{render_url}/{TOKEN}"
-    bot.remove_webhook()
-    bot.set_webhook(url=webhook_url)
-    print(f"Webhook встановлено: {webhook_url}")
-
-  port = int(os.environ.get("PORT", 10000))
-  app.run(host="0.0.0.0", port=port)
+    import asyncio
+    asyncio.run(dp.start_polling(bot))
