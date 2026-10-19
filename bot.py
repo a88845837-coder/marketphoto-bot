@@ -149,7 +149,6 @@ def make_round_avatar(image_bytes: bytes) -> bytes:
     width, height = img.size
     min_side = min(width, height)
     
-    # Обрізаємо до квадрата по центру
     left = (width - min_side) / 2
     top = (height - min_side) / 2
     right = (width + min_side) / 2
@@ -157,56 +156,61 @@ def make_round_avatar(image_bytes: bytes) -> bytes:
     img = img.crop((left, top, right, bottom))
     img = img.resize((512, 512), Image.Resampling.LANCZOS)
 
-    # Створюємо маску кола
     mask = Image.new("L", (512, 512), 0)
     from PIL import ImageDraw
     draw = ImageDraw.Draw(mask)
     draw.ellipse((0, 0, 512, 512), fill=255)
 
-    # Застосовуємо маску
     output = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
     output.paste(img, (0, 0), mask=mask)
 
-    # Зберігаємо у байти PNG
     bio = io.BytesIO()
     output.save(bio, format="PNG")
     bio.seek(0)
     return bio.read()
 
 
-# ================= Покращення та точне перетворення промптів =================
+# ================= Інтелектуальний переклад та оформлення запиту =================
 def enhance_prompt(user_prompt: str, style_name: str) -> str:
     prompt_clean = user_prompt.strip()
 
-    # Словник для адекватного перекладу українських понять на англійську для ШІ
+    # Словник для правильного перекладу поширених українських персонажів та об'єктів
     dictionary = {
-        "автомобіль бмв": "a detailed luxury BMW car, cinematic lighting, photorealistic",
-        "бмв": "luxury BMW car, high quality",
-        "автомобіль": "modern luxury car, beautiful lighting",
-        "машина": "modern car",
-        "рік і морті": "Rick and Morty cartoon style, 2D animation, official character design",
-        "рік та морті": "Rick and Morty cartoon style, 2D animation",
-        "кіберпанк": "cyberpunk style, neon lights, futuristic city",
+        "людина-павук": "Spider-Man superhero dynamic action pose, highly detailed",
+        "людина павук": "Spider-Man superhero dynamic action pose, highly detailed",
+        "рік і морті": "Rick and Morty cartoon style, 2D animation",
+        "автомобіль бмв": "luxury BMW car, cinematic lighting",
+        "бмв": "luxury BMW car",
+        "кіберпанк": "cyberpunk style, neon lights, futuristic",
         "кіт": "cute cat",
         "собака": "cute dog",
-        "космос": "outer space, beautiful nebula, stars",
+        "космос": "outer space, nebula, stars",
     }
 
     prompt_lower = prompt_clean.lower()
-    translated_prompt = prompt_clean
+    translated_text = prompt_clean
+
+    # Перевіряємо словник, якщо немає — залишаємо оригінальний текст користувача (але перекладаємо загальні поняття)
+    matched = False
     for ukr, eng in dictionary.items():
         if ukr in prompt_lower:
-            translated_prompt = translated_prompt.lower().replace(ukr, eng)
+            translated_text = prompt_lower.replace(ukr, eng)
+            matched = True
+            break
+    
+    if not matched:
+        # Якщо в словарі немає, просто використовуємо текст користувача (Flux добре розуміє англійську/українську, але додаємо якісні модифікатори)
+        translated_text = prompt_clean
 
-    # Налаштування стилів без зміни суті запиту користувача
+    # Додаємо стиль оформлення залежно від вибору
     if style_name == "Стильна Аватарка":
         extra_style = "high quality, detailed portrait, masterpiece, centered composition"
     elif style_name == "Заставка / Шпалери":
-        extra_style = "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting, wide angle"
-    else:  # Художнє фото
-        extra_style = "digital art illustration, artistic style, masterpiece, beautifully lit"
+        extra_style = "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting"
+    else:
+        extra_style = "digital art illustration, artistic style, masterpiece"
 
-    final_prompt = f"{translated_prompt}, {extra_style}"
+    final_prompt = f"{translated_text}, {extra_style}"
     return final_prompt
 
 
@@ -355,7 +359,7 @@ async def cmd_profile(message: Message):
 async def cmd_choose_service(message: Message, state: FSMContext):
     await message.answer(
         "🚀 **Оберіть режим створення:**\n\n"
-        "1️⃣ **З нуля за описом (Text-to-Image)** — напишіть будь-який запит, і ШІ змалює це точно за вашими словами.\n"
+        "1️⃣ **З нуля за описом (Text-to-Image)** — напишіть будь-який запит (наприклад: *Людина-павук*), і ШІ змалює саме це.\n"
         "2️⃣ **Обробка фото** — надішліть свою світлину для стилізації.",
         reply_markup=generation_mode_keyboard(),
         parse_mode="Markdown",
@@ -399,7 +403,7 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
         await state.set_state(PhotoGenerationState.waiting_for_text)
         await callback.message.edit_text(
             f"🎯 Обрано стиль: **{selected_name}**\n\n"
-            f"✏️ Напишіть текстом, що саме ви хочете намалювати (наприклад: _«Автомобіль бмв»_ або _«Кіберпанк місто»_):",
+            f"✏️ Напишіть текстом, що саме ви хочете намалювати (наприклад: _«Людина-павук»_):",
             parse_mode="Markdown",
         )
     else:
@@ -415,9 +419,9 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
 # ================= Анімація прогресу =================
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі Flux...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз вашого запиту...*", 0.5),
-        ("🎨 **Малюємо зображення...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створюємо об'єкти за текстом...*", 0.7),
-        ("✨ **Деталізація...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Налаштування освітлення...*", 0.7),
+        ("🚀 **Запуск нейромережі Flux...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка запиту...*", 0.5),
+        ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створюємо деталі...*", 0.7),
+        ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Налаштування освітлення...*", 0.7),
         ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження результату...*", 0.4),
     ]
 
@@ -453,7 +457,6 @@ async def process_text_generation(message: Message, state: FSMContext):
     status_msg = await message.answer("🚀 Починаємо створення за вашим запитом...")
     await animate_progress(status_msg, style_name)
 
-    # Формування запиту
     formatted_prompt = enhance_prompt(prompt_text, style_name)
     encoded_prompt = urllib.parse.quote(formatted_prompt)
     seed = int(time.time() * 1000) % 100000
@@ -464,7 +467,6 @@ async def process_text_generation(message: Message, state: FSMContext):
     except Exception:
         pass
 
-    # Завантаження згенерованої картинки через aiohttp
     import aiohttp
     image_bytes = None
     async with aiohttp.ClientSession() as session:
@@ -477,7 +479,6 @@ async def process_text_generation(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    # Якщо обрано стиль "Стильна Аватарка", робимо фото круглим
     if style_name == "Стильна Аватарка":
         image_bytes = make_round_avatar(image_bytes)
 
@@ -733,7 +734,7 @@ async def cmd_help(message: Message):
         "ℹ️ **Довідка:**\n\n"
         f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
         "• Бот точно виконує ваші текстові запити та малює зображення високої якості.\n"
-        "• Стиль «Стильна Аватарка» автоматично робить фото круглі формою.\n"
+        "• Стиль «Стильна Аватарка» автоматично робить фото круглим.\n"
         "• У разі бракованого результату скористайтеся кнопкою **«⚠️ Брак»** під фото.",
         parse_mode="Markdown",
     )
@@ -778,7 +779,7 @@ async def cmd_refund_manual(message: Message):
             try:
                 await bot.send_message(
                     target_user_id,
-                    f"🎁 **Адміністратор повернув вам {credits_to_return} кредит(ів)!**\n💰 Ваш поточний баланс: **{updated_data['credits']}**",
+                    f"🎁 **Адміністратор повернув вам {credits_to_return} кредит(ів)!**\n💰 Поточний баланс: **{updated_data['credits']}**",
                 )
             except Exception:
                 pass
