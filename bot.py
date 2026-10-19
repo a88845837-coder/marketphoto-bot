@@ -14,7 +14,7 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
-# 📌 Ваш Telegram ID адміністратора
+# 📌 Ваш чинний Telegram ID адміністратора
 ADMIN_ID = 5694967765
 CARD_NUMBER = "4874 0700 7067 8378"
 DATA_FILE = "users_db.json"
@@ -56,27 +56,28 @@ def add_credits_to_user(user_id, amount):
   db = load_db()
   str_id = str(user_id)
   today = str(datetime.date.today())
-  
+
   if str_id not in db:
     db[str_id] = {"credits": 15, "last_date": today, "is_pro": False}
-  
+
   db[str_id]["credits"] += amount
   save_db(db)
-  print(f"Успішно додано {amount} кредитів для користувача {user_id}. Новий баланс: {db[str_id]['credits']}")
+  print(f"✅ Успішно додано {amount} кредитів для {user_id}. Баланс: {db[str_id]['credits']}")
 
 
 def set_user_pro_status(user_id, is_pro=True):
   db = load_db()
   str_id = str(user_id)
   today = str(datetime.date.today())
-  
+
   if str_id not in db:
     db[str_id] = {"credits": 15, "last_date": today, "is_pro": False}
-    
+
   db[str_id]["is_pro"] = is_pro
   if is_pro:
     db[str_id]["credits"] = 9999
   save_db(db)
+  print(f"✅ Статус PRO встановлено для {user_id}")
 
 
 # Словник для швидкого перекладу
@@ -132,7 +133,7 @@ def get_universal_prompt(user_text, style="standard"):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Fixed Admin Payments) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot (Active) is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -264,8 +265,7 @@ def callback_claim_payment(call):
   )
   bot.send_message(
       call.message.chat.id,
-      "⏳ **Запит на перевірку надіслано!** Дякуємо! Адміністратор перевірить"
-      " надходження коштів на картку та підтвердить платіж.",
+      "⏳ **Запит на перевірку надіслано!** Адміністратор перевірить надходження коштів і підтвердить платіж найближчим часом.",
       parse_mode="Markdown",
   )
 
@@ -279,6 +279,7 @@ def callback_claim_payment(call):
       ),
   )
 
+  # Надсилаємо сповіщення адміністратору і виводимо лог на сервері Render
   try:
     bot.send_message(
         ADMIN_ID,
@@ -290,14 +291,16 @@ def callback_claim_payment(call):
         reply_markup=admin_markup,
         parse_mode="Markdown",
     )
+    print(f"🔔 Адміну ({ADMIN_ID}) надіслано заявку від користувача {user_id}")
   except Exception as e:
-    print(f"Помилка відправки адміну: {e}")
+    print(f"❌ Помилка надсилання сповіщення адміну (перевірте ADMIN_ID): {e}")
 
 
 @bot.callback_query_handler(
     func=lambda call: call.data.startswith("appr_") or call.data.startswith("decl_")
 )
 def callback_admin_action(call):
+  # Надійний захист: перевіряємо, чи це тицьнув саме адміністратор
   if call.from_user.id != ADMIN_ID:
     bot.answer_callback_query(call.id, "❌ Ви не адміністратор!", show_alert=True)
     return
@@ -316,10 +319,12 @@ def callback_admin_action(call):
       set_user_pro_status(target_user_id, True)
       msg_text = "⭐ **Вашу оплату підтверджено!** PRO-підписку активовано. 🚀"
 
+    # Обов'язково надсилаємо повідомлення покупцю
     try:
       bot.send_message(target_user_id, msg_text, parse_mode="Markdown")
+      print(f"✅ Повідомлення про успіх успішно доставлено користувачу {target_user_id}")
     except Exception as e:
-      print(f"Не вдалось надіслати повідомлення покупцю: {e}")
+      print(f"❌ Не вдалось надіслати повідомлення покупцю {target_user_id}: {e}")
 
     bot.edit_message_text(
         f"✅ **УСПІШНО ПІДТВЕРДЖЕНО** для ID `{target_user_id}`!",
@@ -333,8 +338,7 @@ def callback_admin_action(call):
     try:
       bot.send_message(
           target_user_id,
-          "❌ **Оплату не знайдено.** Перевірте, чи ви переказали кошти та вказали"
-          " правильний ID у коментарі.",
+          "❌ **Оплату не знайдено.** Перевірте, чи ви переказали кошти та вказали правильний ID у коментарі.",
           parse_mode="Markdown",
       )
     except:
@@ -415,8 +419,6 @@ def process_generation(message, user_text):
     img_response = requests.get(image_url, headers=headers, timeout=120)
     if img_response.status_code == 200:
       if not user.get("is_pro", False):
-        update_user_credits = get_user_data(user_id)
-        # Списуємо 5 кредитів
         db = load_db()
         str_id = str(user_id)
         if str_id in db:
