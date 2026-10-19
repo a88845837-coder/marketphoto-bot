@@ -15,8 +15,8 @@ from aiogram.types import (
 )
 
 # ================= Налаштування =================
-BOT_TOKEN = "ТВІЙ_ТОКЕН_БОТА"  # Вкажи свій токен
-ADMIN_ID = 5694967765        # Твій Telegram ID
+BOT_TOKEN = "8616836203:AAGImAKF-vFvJOQ0Qo1VSQ8mZFoPJ8nkzLs"  # Твій новий активний токен
+ADMIN_ID = 5694967765                                         # Твій Telegram ID
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
