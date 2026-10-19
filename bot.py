@@ -1,15 +1,16 @@
 import asyncio
-import datetime
-import json
-import os
-import time
-import urllib.parse
-from aiohttp import web
+datetime = __import__('datetime')
+json = __import__('json')
+os = __import__('os')
+time = __import__('time')
+urllib = __import__('urllib.parse', fromlist=['quote'])
+aiohttp = __import__('aiohttp')
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
+    BufferedInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -105,7 +106,6 @@ def use_generation(user_id: int):
 def enhance_prompt(user_prompt: str, style: str) -> str:
     p = user_prompt.strip().lower()
     
-    # Словник для точного перекладу і розуміння запитів
     dictionary = {
         "губка боб": "SpongeBob SquarePants cartoon character, vibrant colors, digital art",
         "губка боб квадратні штани": "SpongeBob SquarePants cartoon character, vibrant colors",
@@ -244,10 +244,10 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
 
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі Microsoft / DALL-E...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
+        ("🚀 **Запуск нейромережі...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
         ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення деталей...*", 0.4),
         ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна обробка...*", 0.4),
-        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Відправляємо результат...*", 0.2),
+        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження файлу...*", 0.2),
     ]
 
     for text, delay in stages:
@@ -277,23 +277,38 @@ async def process_text_gen(message: Message, state: FSMContext):
     await animate_progress(status_msg, s_name)
 
     prompt = enhance_prompt(message.text, s_name)
-    # Змінено модель на dall-e від Microsoft
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=dall-e&nologo=true"
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux&nologo=true"
+
+    image_bytes = None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    image_bytes = await resp.read()
+    except Exception as e:
+        print(f"Помилка завантаження картинки: {e}")
 
     try:
         await status_msg.delete()
     except Exception:
         pass
 
+    if not image_bytes:
+        await message.answer("❌ Не вдалося завантажити зображення від нейромережі. Спробуйте ще раз.")
+        await state.clear()
+        return
+
+    photo_file = BufferedInputFile(image_bytes, filename="generated.png")
+
     try:
         await message.answer_photo(
-            photo=url,
+            photo=photo_file,
             caption=f"✨ **Згенеровано за вашим запитом!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
             reply_markup=user_result_keyboard(),
             parse_mode="Markdown",
         )
     except Exception as e:
-        await message.answer(f"❌ Помилка надсилання фото: {e}. Спробуйте ще раз.")
+        await message.answer(f"❌ Помилка надсилання фото: {e}")
         
     await state.clear()
 
