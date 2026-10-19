@@ -179,7 +179,7 @@ async def cmd_services(message: Message):
         )
     else:
         await message.answer(
-            f"⚙️ Ви можете використати функцію бота.\nУ вас є **{user_data['credits']}** кредитів.",
+            f"⚙️ Ви можете використати функцію бота.\nНадішліть фото для обробки. Кожна обробка коштує **1 кредит**.\n\nУ вас є: **{user_data['credits']}** кредитів.",
             parse_mode="Markdown",
         )
 
@@ -190,8 +190,97 @@ async def cmd_help(message: Message):
         "ℹ️ **Довідка:**\n\n"
         "• Оплата здійснюється виключно за допомогою Telegram Stars.\n"
         "• Баланс поповнюється автоматично після успішної транзакції.\n"
-        "• З усіх питань звертайтеся до адміністратора."
+        "• Якщо фото вийшло з помилкою або неналежної якості, адресована система автоматично поверне вам кредити після перевірки адміном."
     )
+
+
+# ================= Обробка фото користувача та Модерація Адміном =================
+
+@dp.message(F.photo)
+async def process_user_photo(message: Message):
+    user_id = message.from_user.id
+    user_data = get_user_data(user_id)
+
+    if user_data["credits"] <= 0:
+        await message.answer("❌ Недостатньо кредитів! Поповніть їх у «🛒 Магазин зірок».")
+        return
+
+    # Списуємо 1 кредит за обробку
+    update_user_purchase(user_id, credits_to_add=-1)
+    
+    # Беремо останнє (найкраще за якістю) фото
+    photo_file_id = message.photo[-1].file_id
+
+    # Взяття фото в роботу і надсилання результату користувачеві
+    await message.answer("📸 Ваше фото успішно прийнято та опрацьовано!")
+    await message.answer_photo(photo_file_id, caption="✨ Ось ваш результат!")
+
+    # Надсилаємо сповіщення адміну для перевірки якості
+    admin_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Все добре", callback_data=f"mod_ok_{user_id}"),
+                InlineKeyboardButton(text="🔄 Повернути 1 кредит", callback_data=f"mod_refund_{user_id}_1")
+            ]
+        ]
+    )
+
+    try:
+        await bot.send_photo(
+            ADMIN_ID,
+            photo=photo_file_id,
+            caption=(
+                f"📊 **Нове оброблене фото!**\n\n"
+                f"👤 Користувач: @{message.from_user.username or 'немає'} (ID: `{user_id}`)\n"
+                f"💎 Залишок кредитів у юзера: **{user_data['credits'] - 1}**\n\n"
+                f"Оцініть якість фото нижче:"
+            ),
+            reply_markup=admin_kb,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"Помилка надсилання сповіщення адміну: {e}")
+
+
+# Колбек обробки дій модерації адміністратором
+@dp.callback_query(F.data.startswith("mod_"))
+async def process_moderation(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ У вас немає прав модератора.", show_alert=True)
+        return
+
+    data = callback.data.split("_")
+    action = data[1]
+    target_user_id = int(data[2])
+
+    if action == "ok":
+        await callback.message.edit_caption(
+            caption=callback.message.caption + "\n\n✅ **Прийнято (без повернення).**",
+            parse_mode="Markdown"
+        )
+        await callback.answer("Збережено!")
+
+    elif action == "refund":
+        credits_to_return = int(data[3])
+        # Повертаємо кредити юзеру
+        updated_data = update_user_purchase(target_user_id, credits_to_add=credits_to_return)
+
+        await callback.message.edit_caption(
+            caption=callback.message.caption + f"\n\n🔄 **Повернено {credits_to_return} кредит(ів).**",
+            parse_mode="Markdown"
+        )
+        await callback.answer(f"Повернено {credits_to_return} кредит(ів)!")
+
+        # Сповіщаємо користувача про повернення
+        try:
+            await bot.send_message(
+                target_user_id,
+                f"🔄 **Компенсація кредитів!**\n\n"
+                f"Адміністратор перевірив останнє фото і повернув вам **{credits_to_return} кредит(ів)**.\n"
+                f"💰 Ваш поточний баланс: **{updated_data['credits']}**"
+            )
+        except Exception:
+            pass
 
 
 # ================= Оплата через Telegram Stars =================
@@ -278,6 +367,33 @@ async def process_successful_payment(message: Message):
         pass
 
 
+# ================= Команди Адміністратора =================
+
+@dp.message(Command("refund"))
+async def cmd_refund_manual(message: Message):
+    if message.from_user.id == ADMIN_ID:
+        parts = message.text.split()
+        if len(parts) >= 3:
+            target_user_id = int(parts[1])
+            credits_to_return = int(parts[2])
+
+            updated_data = update_user_purchase(target_user_id, credits_to_add=credits_to_return)
+            await message.answer(f"✅ Успішно повернуто **{credits_to_return}** кредитів юзеру `{target_user_id}`.")
+
+            try:
+                await bot.send_message(
+                    target_user_id,
+                    f"🎁 **Адміністратор повернув вам {credits_to_return} кредит(ів)!**\n"
+                    f"💰 Ваш поточний баланс: **{updated_data['credits']}**"
+                )
+            except Exception:
+                pass
+        else:
+            await message.answer("ℹ️ Формат: `/refund [user_id] [кредити]`")
+    else:
+        await message.answer("❌ У вас немає прав на цю команду.")
+
+
 @dp.message(Command("stop"))
 async def cmd_stop(message: Message):
     if message.from_user.id == ADMIN_ID:
@@ -287,7 +403,7 @@ async def cmd_stop(message: Message):
         await message.answer("❌ У вас немає прав на цю команду.")
 
 
-# ================= Вебсервер для задоволення Render =================
+# ================= Вебсервер для Render =================
 async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
