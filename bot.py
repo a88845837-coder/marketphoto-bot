@@ -3,6 +3,7 @@ import datetime
 import json
 import os
 import time
+import urllib.parse
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
@@ -137,6 +138,38 @@ def use_generation(user_id: int):
         return True, "credit", user_data["credits"]
 
     return False, "none", 0
+
+
+# ================= Покращення запитів (Українська ➔ Англійська) =================
+def enhance_prompt(user_prompt: str, style_name: str) -> str:
+    prompt_clean = user_prompt.strip()
+
+    # Словник часто вживаних запитів для точного перекладу
+    dictionary = {
+        "рік і морті": "Rick and Morty",
+        "рік та морті": "Rick and Morty",
+        "кіберпанк": "cyberpunk style",
+        "кіт": "cat",
+        "собака": "dog",
+        "аватарка": "profile avatar, portrait",
+        "заставка": "wallpaper landscape",
+        "космос": "outer space, nebula, stars",
+    }
+
+    prompt_lower = prompt_clean.lower()
+    for ukr, eng in dictionary.items():
+        if ukr in prompt_lower:
+            prompt_clean = prompt_clean.lower().replace(ukr, eng)
+
+    style_prompts = {
+        "Стильна Аватарка": "avatar portrait, vibrant, centered, high quality, 8k, detailed, masterpiece",
+        "Заставка / Шпалери": "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting, masterpiece",
+        "Художнє фото": "digital art, artistic style, masterpiece, highly detailed, beautiful lighting",
+    }
+
+    extra_style = style_prompts.get(style_name, "masterpiece, high quality, 8k")
+    final_prompt = f"{prompt_clean}, {extra_style}"
+    return final_prompt
 
 
 # ================= Клавіатури =================
@@ -284,7 +317,7 @@ async def cmd_profile(message: Message):
 async def cmd_choose_service(message: Message, state: FSMContext):
     await message.answer(
         "🚀 **Оберіть режим створення:**\n\n"
-        "1️⃣ **З нуля за описом (Text-to-Image)** — ви пишете текст, нейромережа малює за вашим запитом.\n"
+        "1️⃣ **З нуля за описом (Text-to-Image)** — напишіть текстовий запит, ШІ змалює персонажа чи сцену.\n"
         "2️⃣ **Обробка фото** — надішліть свою світлину для стилізації.",
         reply_markup=generation_mode_keyboard(),
         parse_mode="Markdown",
@@ -328,7 +361,7 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
         await state.set_state(PhotoGenerationState.waiting_for_text)
         await callback.message.edit_text(
             f"🎯 Обрано стиль: **{selected_name}**\n\n"
-            f"✏️ Напишіть текстом, що саме ви хочете згенерувати (наприклад: _«Рік і Морті в космосі»_):",
+            f"✏️ Напишіть текстом, що саме ви хочете згенерувати (наприклад: _«Рік і Морті»_ або _«Rick and Morty in space»_):",
             parse_mode="Markdown",
         )
     else:
@@ -344,10 +377,10 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
 # ================= Анімація прогресу =================
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Аналізуємо ваш запит...**\n░░░░░░░░░░ **0%** ⚙️ *Підготовка нейромережі...*", 0.6),
-        ("🎨 **Генеруємо зображення...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Малюємо деталі...*", 0.8),
-        ("✨ **Штучний інтелект працює...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Додаємо стиль...*", 0.8),
-        ("🎉 **Фінальна обробка!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Готово!*", 0.5),
+        ("🚀 **Запуск високоефективної моделі Flux...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка запиту...*", 0.6),
+        ("🎨 **Генеруємо зображення...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Малюємо об'єкти...*", 0.8),
+        ("✨ **Застосовуємо стилізацію...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Підвищуємо деталізацію...*", 0.8),
+        ("🎉 **Завершення!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Готово!*", 0.5),
     ]
 
     for text, delay in stages:
@@ -361,7 +394,7 @@ async def animate_progress(status_msg: Message, style_name: str):
             pass
 
 
-# ================= Генерація за текстом (Pollinations AI) =================
+# ================= Генерація за текстом (FLUX AI Model) =================
 @dp.message(PhotoGenerationState.waiting_for_text)
 async def process_text_generation(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -379,14 +412,14 @@ async def process_text_generation(message: Message, state: FSMContext):
     state_data = await state.get_data()
     style_name = state_data.get("photo_type", "Загальний стиль")
 
-    status_msg = await message.answer("🚀 Починаємо генерацію за вашим запитом...")
+    status_msg = await message.answer("🚀 Починаємо малювання за вашим запитом...")
     await animate_progress(status_msg, style_name)
 
-    # Формуємо запит до безкоштовного генератора зображень Pollinations AI на основі введеного тексту
-    import urllib.parse
-    full_prompt = f"{prompt_text}, high quality, {style_name}"
-    encoded_prompt = urllib.parse.quote(full_prompt)
-    ai_image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+    # Оптимізація запиту та генерація через модель flux
+    formatted_prompt = enhance_prompt(prompt_text, style_name)
+    encoded_prompt = urllib.parse.quote(formatted_prompt)
+    seed = int(time.time() * 1000) % 100000
+    ai_image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&seed={seed}&nologo=true"
 
     try:
         await status_msg.delete()
@@ -407,7 +440,7 @@ async def process_text_generation(message: Message, state: FSMContext):
     await state.clear()
 
 
-# ================= Обробка фото =================
+# ================= Обробка наданого фото =================
 @dp.message(PhotoGenerationState.waiting_for_photo, F.photo)
 async def process_photo_style(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -642,7 +675,7 @@ async def cmd_help(message: Message):
     await message.answer(
         "ℹ️ **Довідка:**\n\n"
         f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
-        "• Бот повністю розуміє будь-які ваші текстові запити та малює зображення за допомогою ШІ.\n"
+        "• Бот підтримує створення арту за допомогою передової нейромережі Flux.\n"
         "• У разі бракованого результату скористайтеся кнопкою **«⚠️ Брак»** під фото.",
         parse_mode="Markdown",
     )
