@@ -5,7 +5,6 @@ from flask import Flask
 import requests
 import telebot
 
-# Веб-сервер Flask для підтримки роботи на Render 24/7
 app = Flask("")
 
 
@@ -14,9 +13,7 @@ def home():
   return "MarketPhoto AI Bot is running 24/7! 🚀"
 
 
-# Ваш новий токен від BotFather
 TOKEN = "8616836203:AAHnB70MrjS6275-bH4ON8_NR1tVGb4gm0E"
-
 bot = telebot.TeleBot(TOKEN)
 
 
@@ -101,7 +98,9 @@ def handle_message(message):
 
 
 def run_bot():
-  print("Бот запускається...")
+  print("Бот запускається без конфліктів...")
+  # Видаляємо вебхуки та скидаємо старі сесії перед опитуванням
+  bot.remove_webhook()
   bot.infinity_polling(skip_pending=True)
 
 
