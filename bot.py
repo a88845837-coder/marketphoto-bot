@@ -140,21 +140,26 @@ def use_generation(user_id: int):
     return False, "none", 0
 
 
-# ================= Переклад та оформлення запиту =================
+# ================= Інтелектуальний переклад та оформлення запиту =================
 def enhance_prompt(user_prompt: str, style_name: str) -> str:
     prompt_clean = user_prompt.strip()
 
     dictionary = {
+        "полуниця": "fresh juicy red strawberry on a green leaf, macro shot, photorealistic, 4k",
+        "полуниці": "fresh juicy red strawberries, macro shot, photorealistic, 4k",
+        "банани": "bunch of fresh yellow bananas on a table, realistic, 4k",
+        "банан": "fresh yellow banana, realistic",
         "бетмен": "Batman superhero dark knight, cinematic lighting, highly detailed",
         "людина-павук": "Spider-Man superhero dynamic action pose, highly detailed",
         "людина павук": "Spider-Man superhero dynamic action pose, highly detailed",
         "рік і морті": "Rick and Morty cartoon style, 2D animation",
-        "автомобіль бмв": "luxury BMW car, cinematic lighting",
+        "автомобіль бмв": "luxury BMW car, cinematic lighting, road",
         "бмв": "luxury BMW car",
-        "кіберпанк": "cyberpunk style, neon lights, futuristic",
-        "кіт": "cute cat",
-        "собака": "cute dog",
-        "космос": "outer space, nebula, stars",
+        "автомобіль": "modern luxury car, street background",
+        "кіберпанк": "cyberpunk city, neon lights, futuristic",
+        "кіт": "cute fluffy cat, detailed fur",
+        "собака": "cute happy dog",
+        "космос": "outer space, colorful nebula, stars, galaxies",
     }
 
     prompt_lower = prompt_clean.lower()
@@ -162,11 +167,14 @@ def enhance_prompt(user_prompt: str, style_name: str) -> str:
 
     for ukr, eng in dictionary.items():
         if ukr in prompt_lower:
-            translated_text = prompt_lower.replace(ukr, eng)
+            translated_text = eng
             break
 
     if style_name == "Стильна Аватарка":
-        extra_style = "high quality, detailed portrait, masterpiece, centered composition"
+        if any(word in prompt_lower for word in ["полуниц", "банан", "авто", "бмв", "машина", "космос", "кіт", "собака", "бетмен"]):
+            extra_style = "high quality, masterpiece, vivid colors, centered"
+        else:
+            extra_style = "high quality, detailed portrait, masterpiece, centered composition"
     elif style_name == "Заставка / Шпалери":
         extra_style = "epic wallpaper, ultra detailed, 8k resolution, cinematic lighting"
     else:
@@ -321,7 +329,7 @@ async def cmd_profile(message: Message):
 async def cmd_choose_service(message: Message, state: FSMContext):
     await message.answer(
         "🚀 **Оберіть режим створення:**\n\n"
-        "1️⃣ **З нуля за описом (Text-to-Image)** — напишіть будь-який запит (наприклад: *Бетмен*), і ШІ змалює саме це.\n"
+        "1️⃣ **З нуля за описом (Text-to-Image)** — напишіть будь-який запит, і ШІ змалює саме це.\n"
         "2️⃣ **Обробка фото** — надішліть свою світлину для стилізації.",
         reply_markup=generation_mode_keyboard(),
         parse_mode="Markdown",
@@ -365,7 +373,7 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
         await state.set_state(PhotoGenerationState.waiting_for_text)
         await callback.message.edit_text(
             f"🎯 Обрано стиль: **{selected_name}**\n\n"
-            f"✏️ Напишіть текстом, що саме ви хочете намалювати (наприклад: _«Бетмен»_):",
+            f"✏️ Напишіть текстом, що саме ви хочете намалювати:",
             parse_mode="Markdown",
         )
     else:
@@ -434,323 +442,3 @@ async def process_text_generation(message: Message, state: FSMContext):
         caption=(
             f"✨ **Згенеровано за вашим запитом!**\n"
             f"🎨 Стиль: _{style_name}_\n"
-            f"📝 Ваш запит: _{prompt_text}_\n\n"
-            f"Якщо якість вас не влаштувала, натисніть кнопку нижче:"
-        ),
-        reply_markup=user_result_keyboard(),
-        parse_mode="Markdown",
-    )
-    await state.clear()
-
-
-# ================= Обробка фото =================
-@dp.message(PhotoGenerationState.waiting_for_photo, F.photo)
-async def process_photo_style(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-
-    success, source_type, remainder = use_generation(user_id)
-    if not success:
-        await message.answer(
-            "❌ У вас закінчилися безкоштовні спроби та кредити!\n"
-            "Поповніть баланс у «🛒 Магазин зірок»."
-        )
-        await state.clear()
-        return
-
-    state_data = await state.get_data()
-    style_name = state_data.get("photo_type", "Загальний стиль")
-
-    status_msg = await message.answer("🚀 Обробляємо ваше фото...")
-    await animate_progress(status_msg, style_name)
-
-    photo_file_id = message.photo[-1].file_id
-
-    try:
-        await status_msg.delete()
-    except Exception:
-        pass
-
-    await message.answer_photo(
-        photo=photo_file_id,
-        caption=(
-            f"✨ **Обробку завершено!**\n"
-            f"🎨 Стиль: _{style_name}_\n\n"
-            f"Якщо результат бракований, натисніть кнопку нижче:"
-        ),
-        reply_markup=user_result_keyboard(),
-        parse_mode="Markdown",
-    )
-    await state.clear()
-
-
-# ================= Заявка про брак від юзера =================
-@dp.callback_query(F.data == "user_report_defect")
-async def process_user_defect_report(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    photo_file_id = callback.message.photo[-1].file_id if callback.message.photo else None
-
-    await callback.answer("📩 Заявка про брак надіслана адміністратору!", show_alert=True)
-    await callback.message.edit_caption(
-        caption=callback.message.caption + "\n\n⏳ **Заявку про брак відправлено на перевірку адміну.**",
-        parse_mode="Markdown",
-    )
-
-    admin_kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🔄 Повернути спробу / кредит",
-                    callback_data=f"mod_refund_{user_id}",
-                ),
-                InlineKeyboardButton(
-                    text="❌ Відхилити",
-                    callback_data=f"mod_reject_{user_id}",
-                ),
-            ]
-        ]
-    )
-
-    try:
-        caption_text = (
-            f"⚠️ **Скарга на брак від користувача!**\n\n"
-            f"👤 Користувач: @{callback.from_user.username or 'немає'} (ID: `{user_id}`)\n"
-            f"Перевірте фото та поверніть спробу за потреби:"
-        )
-
-        if photo_file_id:
-            await bot.send_photo(
-                ADMIN_ID,
-                photo=photo_file_id,
-                caption=caption_text,
-                reply_markup=admin_kb,
-                parse_mode="Markdown",
-            )
-        else:
-            await bot.send_message(
-                ADMIN_ID,
-                text=caption_text,
-                reply_markup=admin_kb,
-                parse_mode="Markdown",
-            )
-    except Exception as e:
-        print(f"Помилка відправки адміну: {e}")
-
-
-# ================= Колбеки модератора =================
-@dp.callback_query(F.data.startswith("mod_"))
-async def process_moderation(callback: types.CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Немає прав.", show_alert=True)
-        return
-
-    data = callback.data.split("_")
-    action = data[1]
-    target_user_id = int(data[2])
-
-    if action == "reject":
-        await callback.message.edit_caption(
-            caption=callback.message.caption + "\n\n❌ **Скаргу відхилено.**",
-            parse_mode="Markdown",
-        )
-        await callback.answer("Відхилено.")
-
-    elif action == "refund":
-        db = load_db()
-        user_id_str = str(target_user_id)
-        if user_id_str in db:
-            if db[user_id_str].get("daily_count", 0) > 0:
-                db[user_id_str]["daily_count"] -= 1
-            else:
-                db[user_id_str]["credits"] += 1
-            save_db(db)
-
-        await callback.message.edit_caption(
-            caption=callback.message.caption + "\n\n✅ **Спробу/кредит повернуто користувачеві.**",
-            parse_mode="Markdown",
-        )
-        await callback.answer("Компенсацію надано!")
-
-        try:
-            await bot.send_message(
-                target_user_id,
-                "🎁 **Компенсація!**\nВашу скаргу на брак розглянуто. Вам повернено 1 спробу/кредит на баланс.",
-            )
-        except Exception:
-            pass
-
-
-# ================= Оплата Telegram Stars =================
-@dp.message(Command("shop", "buy"))
-@dp.message(F.text == "🛒 Магазин зірок")
-async def cmd_shop(message: Message):
-    await message.answer(
-        "🛒 **Магазин покупок за Telegram Stars (XTR)**\n\n"
-        "Оберіть потрібний пакет. Оплата проходить миттєво й безпечно:",
-        reply_markup=shop_keyboard(),
-        parse_mode="Markdown",
-    )
-
-
-@dp.callback_query(
-    F.data.in_(["buy_50_credits", "buy_100_credits", "buy_vip_sub"])
-)
-async def process_buy_callback(callback: types.CallbackQuery):
-    if callback.data == "buy_50_credits":
-        title = "Пакет 50 кредитів"
-        desc = "Поповнення балансу бота на 50 кредитів."
-        price = 25
-        payload = "payload_50_credits"
-    elif callback.data == "buy_100_credits":
-        title = "Пакет 100 кредитів"
-        desc = "Поповнення балансу бота на 100 кредитів."
-        price = 45
-        payload = "payload_100_credits"
-    elif callback.data == "buy_vip_sub":
-        title = "VIP Підписка на 30 днів"
-        desc = "Отримання VIP-статусу + 50 бонусних кредитів."
-        price = 100
-        payload = "payload_vip_sub"
-
-    prices = [LabeledPrice(label=title, amount=price)]
-
-    await bot.send_invoice(
-        chat_id=callback.message.chat.id,
-        title=title,
-        description=desc,
-        payload=payload,
-        provider_token="",
-        currency="XTR",
-        prices=prices,
-        start_parameter="buy-stars",
-    )
-    await callback.answer()
-
-
-@dp.pre_checkout_query()
-async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
-
-
-@dp.message(F.successful_payment)
-async def process_successful_payment(message: Message):
-    payment_info = message.successful_payment
-    payload = payment_info.invoice_payload
-    user_id = message.from_user.id
-    stars = payment_info.total_amount
-
-    if payload == "payload_50_credits":
-        user_data = update_user_purchase(
-            user_id, credits_to_add=50, stars_spent=stars
-        )
-        msg_text = f"🎉 **Дякуємо за покупку!**\n\n➕ Зараховано: **50 кредитів**\n💰 Поточний баланс: **{user_data['credits']}**"
-    elif payload == "payload_100_credits":
-        user_data = update_user_purchase(
-            user_id, credits_to_add=100, stars_spent=stars
-        )
-        msg_text = f"🎉 **Дякуємо за покупку!**\n\n➕ Зараховано: **100 кредитів**\n💰 Поточний баланс: **{user_data['credits']}**"
-    elif payload == "payload_vip_sub":
-        user_data = update_user_purchase(
-            user_id, credits_to_add=50, stars_spent=stars, days_sub=30
-        )
-        msg_text = (
-            "👑 **VIP Підписку активовано!**\n\n"
-            "📅 Термін: **30 днів**\n"
-            "➕ Додано: **50 бонусних кредитів**"
-        )
-
-    await message.answer(msg_text, parse_mode="Markdown")
-
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"🔔 **Нова оплата зірками!**\n\n"
-            f"Користувач: @{message.from_user.username or 'немає'} (ID: `{user_id}`)\n"
-            f"Сума: **{stars} Stars (XTR)**\n"
-            f"Товар: `{payload}`",
-            parse_mode="Markdown",
-        )
-    except Exception:
-        pass
-
-
-@dp.message(F.text == "ℹ️ Допомога")
-async def cmd_help(message: Message):
-    await message.answer(
-        "ℹ️ **Довідка:**\n\n"
-        f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
-        "• Бот точно виконує ваші текстові запити та генерує зображення за допомогою ШІ.\n"
-        "• У разі бракованого результату скористайтеся кнопкою **«⚠️ Брак»** під фото.",
-        parse_mode="Markdown",
-    )
-
-
-# ================= Адмін-команди =================
-@dp.message(Command("stats"))
-async def cmd_stats(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        db = load_db()
-        await message.answer(
-            f"📊 **Статистика бота:**\n\n👥 Всього користувачів у базі: **{len(db)}**",
-            parse_mode="Markdown",
-        )
-
-
-@dp.message(Command("addcredits"))
-async def cmd_add_credits(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        parts = message.text.split()
-        if len(parts) >= 3:
-            target_user_id, credits_amount = int(parts[1]), int(parts[2])
-            updated_data = update_user_purchase(target_user_id, credits_to_add=credits_amount)
-            await message.answer(f"✅ Нараховано **{credits_amount}** кредитів юзеру `{target_user_id}`.")
-            try:
-                await bot.send_message(
-                    target_user_id,
-                    f"🎁 **Адміністратор нарахував вам {credits_amount} кредит(ів)!**\n💰 Поточний баланс: **{updated_data['credits']}**",
-                )
-            except Exception:
-                pass
-
-
-@dp.message(Command("refund"))
-async def cmd_refund_manual(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        parts = message.text.split()
-        if len(parts) >= 3:
-            target_user_id, credits_to_return = int(parts[1]), int(parts[2])
-            updated_data = update_user_purchase(target_user_id, credits_to_add=credits_to_return)
-            await message.answer(f"✅ Успішно повернуто **{credits_to_return}** кредитів юзеру `{target_user_id}`.")
-            try:
-                await bot.send_message(
-                    target_user_id,
-                    f"🎁 **Адміністратор повернув вам {credits_to_return} кредит(ів)!**\n💰 Ваш поточний баланс: **{updated_data['credits']}**",
-                )
-            except Exception:
-                pass
-
-
-# ================= Вебсервер для Render =================
-async def handle_ping(request):
-    return web.Response(text="Bot is running!")
-
-
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get("/", handle_ping)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.environ.get("PORT", 10000))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    print(f"🌐 Вебсервер запущено на порту {port}")
-
-
-# ================= Запуск =================
-async def main():
-    await start_web_server()
-    print("🚀 Бот успішно запущений і працює!")
-    await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
