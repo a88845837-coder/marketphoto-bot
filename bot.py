@@ -23,11 +23,13 @@ bot = telebot.TeleBot(TOKEN)
 try:
   client = genai.Client(api_key=GEMINI_API_KEY)
 except Exception as e:
+  print(f"Помилка ініціалізації genai: {e}")
   client = None
 
 
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
+  print(f"Отримано команду /start від користувача {message.chat.id}")
   bot.reply_to(
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
@@ -38,6 +40,7 @@ def send_welcome(message):
 
 @bot.message_handler(commands=["generate"])
 def cmd_generate(message):
+  print(f"Отримано команду /generate від користувача {message.chat.id}")
   bot.reply_to(
       message,
       "🎨 **Режим преміум-генерації!**\n\nОпишіть товар якомога детальніше! 📸✨",
@@ -46,11 +49,11 @@ def cmd_generate(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+  print(f"Отримано текст для генерації: {message.text}")
   bot.send_chat_action(message.chat.id, "upload_photo")
   user_text = message.text
-  image_prompt = user_text  # Запасний варіант (якщо Gemini пропустить)
+  image_prompt = user_text  # Запасний варіант
 
-  # Спробуємо покращити промпт через Gemini
   if client:
     try:
       prompt_refiner = client.models.generate_content(
@@ -61,8 +64,8 @@ def handle_message(message):
               " for a high-end AI image generator (Flux). Include details about"
               " professional studio softbox lighting, sharp focus,"
               " hyper-realistic textures, clean isolated pure seamless white"
-              " background, 8k resolution, e-commerce catalog style, highly"
-              f" detailed: {user_text}"
+              " background, 8k resolution, e-commerce catalog style,"
+              f" highly detailed: {user_text}"
           ),
       )
       if prompt_refiner and prompt_refiner.text:
@@ -94,6 +97,7 @@ def handle_message(message):
       )
 
   except Exception as e:
+    print(f"Помилка при відправці фото: {e}")
     bot.reply_to(
         message,
         f"❌ Сталася помилка при генерації:\n`{str(e)}`",
@@ -102,8 +106,8 @@ def handle_message(message):
 
 
 def run_bot():
-  print("Бот запущений!")
-  bot.infinity_polling()
+  print("Бот запускається та підключається до Telegram...")
+  bot.infinity_polling(skip_pending=True)
 
 
 if __name__ == "__main__":
