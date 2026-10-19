@@ -11,7 +11,6 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
-    BufferedInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -20,7 +19,7 @@ from aiogram.types import (
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
 )
-from PIL import Image, ImageOps
+from PIL import Image
 
 # ================= Налаштування =================
 BOT_TOKEN = "8616836203:AAGImAKF-vFvJOQ0Qo1VSQ8mZFoPJ8nkzLs"
@@ -143,39 +142,12 @@ def use_generation(user_id: int):
     return False, "none", 0
 
 
-# ================= Обробка картинки в круглу форму (Аватарка) =================
-def make_round_avatar(image_bytes: bytes) -> bytes:
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    width, height = img.size
-    min_side = min(width, height)
-    
-    left = (width - min_side) / 2
-    top = (height - min_side) / 2
-    right = (width + min_side) / 2
-    bottom = (height + min_side) / 2
-    img = img.crop((left, top, right, bottom))
-    img = img.resize((512, 512), Image.Resampling.LANCZOS)
-
-    mask = Image.new("L", (512, 512), 0)
-    from PIL import ImageDraw
-    draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0, 512, 512), fill=255)
-
-    output = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    output.paste(img, (0, 0), mask=mask)
-
-    bio = io.BytesIO()
-    output.save(bio, format="PNG")
-    bio.seek(0)
-    return bio.read()
-
-
-# ================= Інтелектуальний переклад та оформлення запиту =================
+# ================= Інтелектуальний переклад запиту =================
 def enhance_prompt(user_prompt: str, style_name: str) -> str:
     prompt_clean = user_prompt.strip()
 
-    # Словник для правильного перекладу поширених українських персонажів та об'єктів
     dictionary = {
+        "бетмен": "Batman superhero dark knight, cinematic lighting, highly detailed",
         "людина-павук": "Spider-Man superhero dynamic action pose, highly detailed",
         "людина павук": "Spider-Man superhero dynamic action pose, highly detailed",
         "рік і морті": "Rick and Morty cartoon style, 2D animation",
@@ -190,19 +162,11 @@ def enhance_prompt(user_prompt: str, style_name: str) -> str:
     prompt_lower = prompt_clean.lower()
     translated_text = prompt_clean
 
-    # Перевіряємо словник, якщо немає — залишаємо оригінальний текст користувача (але перекладаємо загальні поняття)
-    matched = False
     for ukr, eng in dictionary.items():
         if ukr in prompt_lower:
             translated_text = prompt_lower.replace(ukr, eng)
-            matched = True
             break
-    
-    if not matched:
-        # Якщо в словарі немає, просто використовуємо текст користувача (Flux добре розуміє англійську/українську, але додаємо якісні модифікатори)
-        translated_text = prompt_clean
 
-    # Додаємо стиль оформлення залежно від вибору
     if style_name == "Стильна Аватарка":
         extra_style = "high quality, detailed portrait, masterpiece, centered composition"
     elif style_name == "Заставка / Шпалери":
@@ -254,7 +218,7 @@ def photo_type_keyboard():
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="👤 Стильна Аватарка (Кругла)", callback_data="type_avatar"
+                    text="👤 Стильна Аватарка", callback_data="type_avatar"
                 )
             ],
             [
@@ -359,7 +323,7 @@ async def cmd_profile(message: Message):
 async def cmd_choose_service(message: Message, state: FSMContext):
     await message.answer(
         "🚀 **Оберіть режим створення:**\n\n"
-        "1️⃣ **З нуля за описом (Text-to-Image)** — напишіть будь-який запит (наприклад: *Людина-павук*), і ШІ змалює саме це.\n"
+        "1️⃣ **З нуля за описом (Text-to-Image)** — напишіть будь-який запит (наприклад: *Бетмен*), і ШІ змалює саме це.\n"
         "2️⃣ **Обробка фото** — надішліть свою світлину для стилізації.",
         reply_markup=generation_mode_keyboard(),
         parse_mode="Markdown",
@@ -403,7 +367,7 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
         await state.set_state(PhotoGenerationState.waiting_for_text)
         await callback.message.edit_text(
             f"🎯 Обрано стиль: **{selected_name}**\n\n"
-            f"✏️ Напишіть текстом, що саме ви хочете намалювати (наприклад: _«Людина-павук»_):",
+            f"✏️ Напишіть текстом, що саме ви хочете намалювати (наприклад: _«Бетмен»_):",
             parse_mode="Markdown",
         )
     else:
@@ -419,10 +383,10 @@ async def process_type_selection(callback: types.CallbackQuery, state: FSMContex
 # ================= Анімація прогресу =================
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі Flux...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка запиту...*", 0.5),
-        ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створюємо деталі...*", 0.7),
-        ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Налаштування освітлення...*", 0.7),
-        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження результату...*", 0.4),
+        ("🚀 **Запуск нейромережі Flux...**\n░░░░░░░░░░ **0%** ⚙️ *Обробка запиту...*", 0.4),
+        ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створюємо деталі...*", 0.5),
+        ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Налаштування освітлення...*", 0.5),
+        ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Відправляємо результат...*", 0.3),
     ]
 
     for text, delay in stages:
@@ -467,25 +431,9 @@ async def process_text_generation(message: Message, state: FSMContext):
     except Exception:
         pass
 
-    import aiohttp
-    image_bytes = None
-    async with aiohttp.ClientSession() as session:
-        async with session.get(ai_image_url) as resp:
-            if resp.status == 200:
-                image_bytes = await resp.read()
-
-    if not image_bytes:
-        await message.answer("❌ Сталася помилка при генерації зображення. Спробуйте ще раз.")
-        await state.clear()
-        return
-
-    if style_name == "Стильна Аватарка":
-        image_bytes = make_round_avatar(image_bytes)
-
-    photo_file = BufferedInputFile(image_bytes, filename="generated.png")
-
+    # Надсилаємо пряме посилання — Telegram сам швидко завантажить картинку без помилок
     await message.answer_photo(
-        photo=photo_file,
+        photo=ai_image_url,
         caption=(
             f"✨ **Згенеровано за вашим запитом!**\n"
             f"🎨 Стиль: _{style_name}_\n"
@@ -698,115 +646,4 @@ async def process_successful_payment(message: Message):
             user_id, credits_to_add=50, stars_spent=stars
         )
         msg_text = f"🎉 **Дякуємо за покупку!**\n\n➕ Зараховано: **50 кредитів**\n💰 Поточний баланс: **{user_data['credits']}**"
-    elif payload == "payload_100_credits":
-        user_data = update_user_purchase(
-            user_id, credits_to_add=100, stars_spent=stars
-        )
-        msg_text = f"🎉 **Дякуємо за покупку!**\n\n➕ Зараховано: **100 кредитів**\n💰 Поточний баланс: **{user_data['credits']}**"
-    elif payload == "payload_vip_sub":
-        user_data = update_user_purchase(
-            user_id, credits_to_add=50, stars_spent=stars, days_sub=30
-        )
-        msg_text = (
-            "👑 **VIP Підписку активовано!**\n\n"
-            "📅 Термін: **30 днів**\n"
-            "➕ Додано: **50 бонусних кредитів**"
-        )
-
-    await message.answer(msg_text, parse_mode="Markdown")
-
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"🔔 **Нова оплата зірками!**\n\n"
-            f"Користувач: @{message.from_user.username or 'немає'} (ID: `{user_id}`)\n"
-            f"Сума: **{stars} Stars (XTR)**\n"
-            f"Товар: `{payload}`",
-            parse_mode="Markdown",
-        )
-    except Exception:
-        pass
-
-
-@dp.message(F.text == "ℹ️ Допомога")
-async def cmd_help(message: Message):
-    await message.answer(
-        "ℹ️ **Довідка:**\n\n"
-        f"• Кожен користувач має **{DAILY_FREE_LIMIT} безкоштовних генерацій** щодня.\n"
-        "• Бот точно виконує ваші текстові запити та малює зображення високої якості.\n"
-        "• Стиль «Стильна Аватарка» автоматично робить фото круглим.\n"
-        "• У разі бракованого результату скористайтеся кнопкою **«⚠️ Брак»** під фото.",
-        parse_mode="Markdown",
-    )
-
-
-# ================= Адмін-команди =================
-@dp.message(Command("stats"))
-async def cmd_stats(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        db = load_db()
-        await message.answer(
-            f"📊 **Статистика бота:**\n\n👥 Всього користувачів у базі: **{len(db)}**",
-            parse_mode="Markdown",
-        )
-
-
-@dp.message(Command("addcredits"))
-async def cmd_add_credits(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        parts = message.text.split()
-        if len(parts) >= 3:
-            target_user_id, credits_amount = int(parts[1]), int(parts[2])
-            updated_data = update_user_purchase(target_user_id, credits_to_add=credits_amount)
-            await message.answer(f"✅ Нараховано **{credits_amount}** кредитів юзеру `{target_user_id}`.")
-            try:
-                await bot.send_message(
-                    target_user_id,
-                    f"🎁 **Адміністратор нарахував вам {credits_amount} кредит(ів)!**\n💰 Поточний баланс: **{updated_data['credits']}**",
-                )
-            except Exception:
-                pass
-
-
-@dp.message(Command("refund"))
-async def cmd_refund_manual(message: Message):
-    if message.from_user.id == ADMIN_ID:
-        parts = message.text.split()
-        if len(parts) >= 3:
-            target_user_id, credits_to_return = int(parts[1]), int(parts[2])
-            updated_data = update_user_purchase(target_user_id, credits_to_add=credits_to_return)
-            await message.answer(f"✅ Успішно повернуто **{credits_to_return}** кредитів юзеру `{target_user_id}`.")
-            try:
-                await bot.send_message(
-                    target_user_id,
-                    f"🎁 **Адміністратор повернув вам {credits_to_return} кредит(ів)!**\n💰 Поточний баланс: **{updated_data['credits']}**",
-                )
-            except Exception:
-                pass
-
-
-# ================= Вебсервер для Render =================
-async def handle_ping(request):
-    return web.Response(text="Bot is running!")
-
-
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get("/", handle_ping)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.environ.get("PORT", 10000))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    print(f"🌐 Вебсервер запущено на порту {port}")
-
-
-# ================= Запуск =================
-async def main():
-    await start_web_server()
-    print("🚀 Бот успішно запущений і працює!")
-    await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    elif payload == "
