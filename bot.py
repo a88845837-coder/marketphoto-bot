@@ -16,9 +16,7 @@ def home():
 
 
 TOKEN = "8616836203:AAGkRFDiPqI2QUahx45iDBm7NyqbPwbv1wA"
-GEMINI_API_KEY = (
-    "AQ.Ab8RN6LX2FibxXl85SX3bIuG5xTGDFqfwjL-R1vVvYPv-9QZOw"
-)
+GEMINI_API_KEY = "AQ.Ab8RN6KQpPZjjgQtQnCOwQnvAaSlmBEbKDsKh06iEB5jld1esQ"
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -56,7 +54,7 @@ def handle_message(message):
 
   try:
     prompt_refiner = client.models.generate_content(
-        model="gemini-3.8-flash",
+        model="gemini-2.5-flash",
         contents=(
             "Convert this product description into an ultra-detailed, professional"
             " commercial product photography prompt in English for a high-end AI"
@@ -95,7 +93,7 @@ def handle_message(message):
     bot.reply_to(
         message,
         f"❌ Сталася помилка при генерації:\n`{str(e)}`",
-        parse_mode="Markdown",
+        parse_Mode="Markdown",
     )
 
 
