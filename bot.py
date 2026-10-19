@@ -29,7 +29,6 @@ except Exception as e:
 
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
-  print(f"Отримано команду /start від користувача {message.chat.id}")
   bot.reply_to(
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
@@ -40,17 +39,25 @@ def send_welcome(message):
 
 @bot.message_handler(commands=["generate"])
 def cmd_generate(message):
-  print(f"Отримано команду /generate від користувача {message.chat.id}")
   bot.reply_to(
       message,
       "🎨 **Режим преміум-генерації!**\n\nОпишіть товар якомога детальніше! 📸✨",
   )
 
 
-@bot.message_handler(func=lambda message: True)
+# Обробляємо лише звичайні повідомлення (які НЕ починаються з "/")
+@bot.message_handler(
+    func=lambda message: message.text and not message.text.startswith("/")
+)
 def handle_message(message):
   print(f"Отримано текст для генерації: {message.text}")
   bot.send_chat_action(message.chat.id, "upload_photo")
+
+  # Відправляємо сповіщення про процес очікування
+  wait_msg = bot.reply_to(
+      message, "⏳ **Генерую студійне фото...** Це може зайняти до хвилини 🎨"
+  )
+
   user_text = message.text
   image_prompt = user_text  # Запасний варіант
 
@@ -77,11 +84,18 @@ def handle_message(message):
     encoded_prompt = urllib.parse.quote(image_prompt)
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
 
-    img_response = requests.get(image_url, timeout=45)
+    # Збільшуємо таймаут до 90 секунд, щоб уникнути помилки тайм-ауту
+    img_response = requests.get(image_url, timeout=90)
 
     if img_response.status_code == 200:
       photo_file = io.BytesIO(img_response.content)
       photo_file.name = "product_photo.jpg"
+
+      # Видаляємо текстове повідомлення "Генерую..." перед відправкою фото
+      try:
+        bot.delete_message(message.chat.id, wait_msg.message_id)
+      except:
+        pass
 
       bot.send_photo(
           message.chat.id,
@@ -92,17 +106,23 @@ def handle_message(message):
           parse_mode="Markdown",
       )
     else:
-      bot.reply_to(
-          message, "❌ Не вдалося отримати фото. Спробуйте ще раз!"
+      bot.edit_message_text(
+          "❌ Не вдалося отримати фото. Спробуйте ще раз!",
+          message.chat.id,
+          wait_msg.message_id,
       )
 
   except Exception as e:
     print(f"Помилка при відправці фото: {e}")
-    bot.reply_to(
-        message,
-        f"❌ Сталася помилка при генерації:\n`{str(e)}`",
-        parse_mode="Markdown",
-    )
+    try:
+      bot.edit_message_text(
+          f"❌ Сталася помилка при генерації:\n`{str(e)}`",
+          message.chat.id,
+          wait_msg.message_id,
+          parse_mode="Markdown",
+      )
+    except:
+      bot.reply_to(message, f"❌ Помилка: `{str(e)}`", parse_mode="Markdown")
 
 
 def run_bot():
