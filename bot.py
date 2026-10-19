@@ -245,7 +245,7 @@ async def process_type(callback: types.CallbackQuery, state: FSMContext):
 
 async def animate_progress(status_msg: Message, style_name: str):
     stages = [
-        ("🚀 **Запуск нейромережі...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
+        ("🚀 **Запуск чистої нейромережі...**\n░░░░░░░░░░ **0%** ⚙️ *Аналіз запиту...*", 0.3),
         ("🎨 **Малюємо за вашим описом...**\n▓▓▓░░░░░░░ **35%** 🖌️ *Створення деталей...*", 0.4),
         ("✨ **Покращення якості...**\n▓▓▓▓▓▓▓░░░ **70%** ⚡ *Фінальна обробка...*", 0.4),
         ("🎉 **Готово!**\n▓▓▓▓▓▓▓▓▓▓ **100%** 🏁 *Завантаження файлу...*", 0.2),
@@ -278,7 +278,9 @@ async def process_text_gen(message: Message, state: FSMContext):
     await animate_progress(status_msg, s_name)
 
     prompt = enhance_prompt(message.text, s_name)
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux&nologo=true"
+    # Використовуємо модель turbo без водяного знака та з параметром nologo=true
+    seed = int(time.time() * 1000) % 100000
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=turbo&seed={seed}&nologo=true"
 
     image_bytes = None
     try:
