@@ -1,10 +1,11 @@
 import asyncio
-datetime = __import__('datetime')
-json = __import__('json')
-os = __import__('os')
-time = __import__('time')
-urllib = __import__('urllib.parse', fromlist=['quote'])
-aiohttp = __import__('aiohttp')
+import datetime
+import json
+import os
+import time
+import urllib.parse
+import aiohttp
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -277,9 +278,7 @@ async def process_text_gen(message: Message, state: FSMContext):
     await animate_progress(status_msg, s_name)
 
     prompt = enhance_prompt(message.text, s_name)
-    
-    # Використовуємо стабільний безкоштовний високоякісний ендпоінт без водяних знаків
-    api_url = "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt) + "?width=1024&height=1024&model=flux-realism&nologo=true"
+    api_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&model=flux-realism&nologo=true"
 
     image_bytes = None
     try:
@@ -305,7 +304,7 @@ async def process_text_gen(message: Message, state: FSMContext):
     try:
         await message.answer_photo(
             photo=photo_file,
-            caption=f"✨ **Ультра-якість (Без водяних знаків)!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
+            caption=f"✨ **Згенеровано в ультра-якості!**\n🎨 Стиль: _{s_name}_\n📝 Запит: _{message.text}_",
             reply_markup=user_result_keyboard(),
             parse_mode="Markdown",
         )
