@@ -1,10 +1,10 @@
 import asyncio
-datetime = __import__('datetime')
-json = __import__('json')
-os = __import__('os')
-time = __import__('time')
-urllib = __import__('urllib.parse', fromlist=['quote'])
-aiohttp = __import__('aiohttp')
+import datetime
+import json
+import os
+import time
+import urllib.parse
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -19,6 +19,7 @@ from aiogram.types import (
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
 )
+import aiohttp
 
 BOT_TOKEN = "8616836203:AAGImAKF-vFvJOQ0Qo1VSQ8mZFoPJ8nkzLs"
 ADMIN_ID = 5694967765
