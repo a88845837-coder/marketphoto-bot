@@ -1,38 +1,69 @@
 import io
 import os
 import urllib.parse
-from flask import Flask
+from flask import Flask, request
 import requests
 import telebot
 
-# Веб-сервер Flask для підтримки роботи на Render 24/7
+TOKEN = "8616836203:AAHnB70MrjS6275-bH4ON8_NR1tVGb4gm0E"
+bot = telebot.TeleBot(TOKEN)
+
 app = Flask("")
+
+# Словник для точного перекладу товарів
+translations = {
+    "годинник": "luxury wristwatch",
+    "годинники": "luxury wristwatches",
+    "кросівки": "stylish sports sneakers",
+    "парфуми": "luxury perfume bottle",
+    "сумка": "leather handbag",
+    "телефон": "modern smartphone",
+    "смартфон": "modern smartphone",
+    "навушники": "wireless headphones",
+    "окуляри": "stylish sunglasses",
+    "каблучка": "elegant diamond ring",
+    "кільце": "elegant diamond ring",
+    "кава": "cup of fresh artisanal coffee",
+    "книга": "hardcover book",
+    "футболка": "cotton t-shirt",
+    "куртка": "stylish winter jacket",
+}
+
+
+def get_english_prompt(user_text):
+  lower_text = user_text.lower().strip()
+  base_subject = ""
+  for key, val in translations.items():
+    if key in lower_text:
+      base_subject = val
+      break
+  if not base_subject:
+    base_subject = f"commercial product of {user_text}"
+
+  return (
+      f"Professional commercial e-commerce product photography of"
+      f" {base_subject}, studio softbox lighting, sharp focus,"
+      " hyper-realistic textures, isolated on a clean pure seamless white"
+      " background, 8k resolution, catalogue style, advertising shot, highly"
+      " detailed, NO humans, NO faces, NO people"
+  )
 
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot is running 24/7! 🚀"
+  return "MarketPhoto AI Bot is running via Webhook 24/7! 🚀"
 
 
-# Ваш токен бота від BotFather
-TOKEN = "8616836203:AAHnB70MrjS6275-bH4ON8_NR1tVGb4gm0E"
-
-bot = telebot.TeleBot(TOKEN)
-
-
-# Функція автоматичного перекладу українського опису на англійську для якісної генерації Flux
-def translate_to_english(ukr_text):
-  try:
-    url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(ukr_text)}&langpair=uk|en"
-    response = requests.get(url, timeout=5)
-    if response.status_code == 200:
-      data = response.json()
-      translated = data.get("responseData", {}).get("translatedText", "")
-      if translated and not translated.startswith("MYMEMORY"):
-        return translated
-  except Exception as e:
-    print(f"Помилка перекладу: {e}")
-  return ukr_text
+# Вебхук-ендпоінт для отримання повідомлень від Telegram
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+  if request.headers.get("content-type") == "application/json":
+    json_string = request.get_data().decode("utf-8")
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "", 200
+  else:
+    return "Invalid content type", 403
 
 
 @bot.message_handler(commands=["start"])
@@ -41,44 +72,42 @@ def send_welcome(message):
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
       "✨ Я твій професійний AI-генератор студійних фото товарів преміум-якості!\n\n"
-      "💬 Напиши мені опис товару (наприклад: *годинник* або *кросівки*), і я"
-      " згенерую фото каталожної якості! 🚀",
+      "💬 Напиши назву товару (наприклад: *годинник*, *кросівки*) або"
+      " скористайся командою `/generate годинник`! 🚀",
   )
 
 
 @bot.message_handler(commands=["generate", "styles"])
 def cmd_generate(message):
-  bot.reply_to(
-      message,
-      "🎨 **Режим преміум-генерації!**\n\nОпишіть товар якомога детальніше!"
-      " 📸✨",
-  )
+  text = message.text.replace("/generate", "").replace("/styles", "").strip()
+  if text:
+    generate_and_send_photo(message, text)
+  else:
+    bot.reply_to(
+        message,
+        "🎨 **Режим преміум-генерації!**\n\nНапишіть назву товару після команди,"
+        " наприклад: `/generate годинник` або просто надішліть її текстом!"
+        " 📸✨",
+    )
 
 
 @bot.message_handler(
     func=lambda message: message.text and not message.text.startswith("/")
 )
 def handle_message(message):
-  print(f"Отримано текст для генерації: {message.text}")
+  generate_and_send_photo(message, message.text)
+
+
+def generate_and_send_photo(message, user_text):
+  print(f"Генерація для: {user_text}")
   bot.send_chat_action(message.chat.id, "upload_photo")
 
   wait_msg = bot.reply_to(
-      message, "⏳ **Генерую студійне фото...** Це може зайняти до хвилини 🎨"
+      message, "⏳ **Генерую студійне фото товару...** Це може зайняти хвилину 🎨"
   )
 
-  user_text = message.text
-
-  # Перекладаємо опис на англійську мову, щоб Flux розумів його ідеально
-  translated_desc = translate_to_english(user_text)
-  print(f"Перекладений промпт: {translated_desc}")
-
-  # Формуємо професійний студійний промпт
-  image_prompt = (
-      f"Professional commercial product photography of {translated_desc}, studio"
-      " softbox lighting, sharp focus, hyper-realistic textures, clean"
-      " isolated pure seamless white background, 8k resolution, e-commerce"
-      " catalog style"
-  )
+  image_prompt = get_english_prompt(user_text)
+  print(f"Фінальний промпт: {image_prompt}")
 
   try:
     encoded_prompt = urllib.parse.quote(image_prompt)
@@ -111,7 +140,7 @@ def handle_message(message):
       )
 
   except Exception as e:
-    print(f"Помилка при відправці фото: {e}")
+    print(f"Помилка при генерації: {e}")
     try:
       bot.edit_message_text(
           f"❌ Сталася помилка при генерації:\n`{str(e)}`",
@@ -123,17 +152,14 @@ def handle_message(message):
       bot.reply_to(message, f"❌ Помилка: `{str(e)}`", parse_mode="Markdown")
 
 
-def run_bot():
-  print("Бот запускається без конфліктів...")
-  bot.remove_webhook()
-  bot.infinity_polling(skip_pending=True)
-
-
 if __name__ == "__main__":
-  import threading
-
-  bot_thread = threading.Thread(target=run_bot)
-  bot_thread.start()
+  # Автоматичне встановлення вебхука на основі публічної URL-адреси Render
+  render_url = os.environ.get("RENDER_EXTERNAL_URL")
+  if render_url:
+    webhook_url = f"{render_url}/{TOKEN}"
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    print(f"Webhook успішно встановлено на: {webhook_url}")
 
   port = int(os.environ.get("PORT", 10000))
   app.run(host="0.0.0.0", port=port)
