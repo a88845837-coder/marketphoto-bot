@@ -17,13 +17,8 @@ app = Flask("")
 # 📌 Ваш Telegram ID для отримання заявок на оплату
 ADMIN_ID = 5694967765
 
-# 📌 Ваш номер картки
+# 📌 Ваш реальний номер картки
 CARD_NUMBER = "4874 0700 7067 8378"
-
-# Посилання на швидку оплату/переказ на вашу картку в Monobank
-# (працює як універсальне посилання, відкриває додаток Mono або веб-сторінку)
-MONO_PAY_LINK = f"https://send.monobank.ua/jar/ВАШЕ_ПОСИЛАННЯ_НА_БАНКУ"  
-# Або пряме посилання на оплату за карткою (можна залишити клікабельну кнопку з номером)
 
 DATA_FILE = "users_db.json"
 
@@ -131,7 +126,7 @@ def get_universal_prompt(user_text, style="standard"):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot (Card Links) is running 24/7! 🚀"
+  return "MarketPhoto AI Bot (Direct Card Payment) is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -223,24 +218,24 @@ def cmd_profile(message):
 @bot.message_handler(commands=["buy"])
 def cmd_buy(message):
   user_id = message.from_user.id
-  
-  # Створюємо кнопку з посиланням на оплату або картку
-  # Замість посилання нижче можна використати посилання на Mono-банку або швидку оплату
-  payment_url = "https://send.monobank.ua/jar/ВАШЕ_ПОСИЛАННЯ_НА_БАНКУ" 
 
   markup = types.InlineKeyboardMarkup()
-  # Кнопка-посилання на оплату карткою
-  markup.add(types.InlineKeyboardButton("💳 Оплатити на картку (Mono)", url=payment_url))
-  # Кнопки підтвердження після оплати
-  markup.add(types.InlineKeyboardButton("✅ Я оплатив 50 кредитів (55 грн)", callback_data="claim_50"))
-  markup.add(types.InlineKeyboardButton("⭐ Я оплатив PRO (199 грн)", callback_data="claim_pro"))
+  markup.add(
+      types.InlineKeyboardButton(
+          "✅ Я оплатив 50 кредитів (55 грн)", callback_data="claim_50"
+      )
+  )
+  markup.add(
+      types.InlineKeyboardButton("⭐ Я оплатив PRO (199 грн)", callback_data="claim_pro")
+  )
 
   bot.reply_to(
       message,
       "🛒 **Магазин підписок та кредитів**\n\n"
-      f"💳 **Номер картки для оплати:** `{CARD_NUMBER}`\n\n"
-      "1. Натисніть кнопку **«Оплатити на картку»** або скопіюйте номер вище.\n"
-      f"2. У коментарі до переказу обов'язково вкажіть ваш ID: `{user_id}`\n"
+      "💳 **Номер картки для оплати:**\n"
+      f"`{CARD_NUMBER}`\n\n"
+      "1. Скопіюйте номер картки вище та зробіть переказ у своєму додатку банку.\n"
+      f"2. У коментарі до платежу обов'язково вкажіть ваш ID: `{user_id}`\n"
       "3. Після переказу натисніть кнопку підтвердження нижче! 🚀",
       reply_markup=markup,
       parse_mode="Markdown",
@@ -264,7 +259,7 @@ def callback_claim_payment(call):
   bot.send_message(
       call.message.chat.id,
       "⏳ **Запит на перевірку надіслано!** Дякуємо! Адміністратор перевірить"
-      " надходження кошти та підтвердить платіж.",
+      " надходження коштів на картку та підтвердить платіж.",
       parse_mode="Markdown",
   )
 
@@ -335,7 +330,7 @@ def callback_admin_action(call):
         f"❌ **ВІДХИЛЕНО** для ID `{target_user_id}`.",
         call.message.chat.id,
         call.message.message_id,
-        parse_Mode="Markdown",
+        parse_mode="Markdown",
     )
 
 
@@ -446,5 +441,5 @@ if __name__ == "__main__":
     bot.set_webhook(url=webhook_url)
     print(f"Webhook встановлено: {webhook_url}")
 
-  port = int(os.environ.get("PORT", 10000))
+  port = int(os.environ.File.get("PORT", 10000)) if hasattr(os.environ, 'File') else int(os.environ.get("PORT", 10000))
   app.run(host="0.0.0.0", port=port)
