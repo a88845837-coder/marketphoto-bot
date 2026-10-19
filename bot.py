@@ -11,20 +11,22 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask("")
 
 
-# Функція автоперекладу та адаптації слів під AI
 def translate_to_english(ukr_text):
   lower_text = ukr_text.lower().strip()
 
+  # Словник для точних предметів без безпекових глюків
   safety_map = {
-      "гроші": "stack of dollar banknotes",
-      "грошей": "stack of dollar banknotes",
+      "гроші": "stack of hundred dollar bills",
+      "грошей": "stack of hundred dollar bills",
       "доллари": "stack of hundred dollar bills",
       "долари": "stack of hundred dollar bills",
-      "готівка": "neat stack of paper currency bills",
-      "валюта": "neat stack of cash notes",
-      "футболка": "blank plain cotton t-shirt",
-      "годинник": "luxury wristwatch",
-      "кросівки": "stylish sports sneakers",
+      "готівка": "stack of dollar banknotes",
+      "валюта": "stack of dollar banknotes",
+      "банан": "single fresh yellow banana",
+      "банани": "fresh yellow bananas",
+      "годинник": "luxury watch",
+      "кросівки": "pair of modern sneakers",
+      "футболка": "blank white t-shirt",
   }
 
   for key, val in safety_map.items():
@@ -52,11 +54,10 @@ def get_universal_prompt(user_text):
       f" '{translated_subject}'"
   )
 
+  # Чистий і прямолінійний промпт, який AI розуміє без збоїв
   return (
-      f"Professional commercial product photography of {translated_subject},"
-      " studio softbox lighting, sharp focus, hyper-realistic textures,"
-      " isolated on pure clean white background, 8k resolution, e-commerce"
-      " catalog style, advertising shot, NO humans, NO faces, NO people"
+      f"A crisp studio product photograph of {translated_subject}, white"
+      " background, studio lighting, hyperrealistic 8k"
   )
 
 
@@ -81,9 +82,8 @@ def send_welcome(message):
   bot.reply_to(
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
-      "✨ Я твій універсальний AI-генератор студійних фото товарів!\n\n"
-      "💬 Надішли назву чи опис товару (наприклад: *футболка*, *годинник*,"
-      " *гроші*), і я згенерую якісне фото! 🚀",
+      "✨ Надішли мені назву будь-якого товару (наприклад: *банан*, *гроші*,"
+      " *годинник*), і я згенерую чисто фото! 🚀",
   )
 
 
@@ -95,8 +95,8 @@ def cmd_generate(message):
   else:
     bot.reply_to(
         message,
-        "🎨 **Режим преміум-генерації!**\n\nНапишіть опис товару після команди,"
-        " наприклад: `/generate футболка` або просто надішліть текстом! 📸✨",
+        "🎨 Напишіть опис товару після команди, наприклад: `/generate банан` або"
+        " просто текстом!",
     )
 
 
@@ -111,18 +111,13 @@ def generate_and_send_photo(message, user_text):
   print(f"Запит на генерацію: {user_text}")
   bot.send_chat_action(message.chat.id, "upload_photo")
 
-  wait_msg = bot.reply_to(
-      message, "⏳ **Генерую студійне фото...** Створюю кадр 🎨"
-  )
+  wait_msg = bot.reply_to(message, "⏳ **Малюю товар...** Зачекайте 🎨")
 
   image_prompt = get_universal_prompt(user_text)
   print(f"Фінальний промпт: {image_prompt}")
 
-  # Список абсолютно безкоштовних альтернативних моделей
-  urls_to_try = [
-      f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&model=turbo&nologo=true",
-      f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&nologo=true",
-  ]
+  # Пряме генераційне посилання без перезавантажених параметрів
+  image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(image_prompt)}?width=1024&height=1024&seed=123&nologo=true"
 
   headers = {
       "User-Agent": (
@@ -131,43 +126,42 @@ def generate_and_send_photo(message, user_text):
       )
   }
 
-  success = False
-  for img_url in urls_to_try:
+  try:
+    img_response = requests.get(image_url, headers=headers, timeout=90)
+
+    if img_response.status_code == 200:
+      photo_file = io.BytesIO(img_response.content)
+      photo_file.name = "product_photo.jpg"
+
+      try:
+        bot.delete_message(message.chat.id, wait_msg.message_id)
+      except:
+        pass
+
+      bot.send_photo(
+          message.chat.id,
+          photo_file,
+          caption="✨ **Готово! Ваш товар на фото** 📸🔥",
+          parse_mode="Markdown",
+      )
+    else:
+      bot.edit_message_text(
+          f"❌ Помилка генерації ({img_response.status_code}). Спробуйте ще"
+          " раз!",
+          message.chat.id,
+          wait_msg.message_id,
+      )
+  except Exception as e:
+    print(f"Помилка: {e}")
     try:
-      print(f"Спроба генерації через: {img_url}")
-      img_response = requests.get(img_url, headers=headers, timeout=90)
-
-      if img_response.status_code == 200:
-        photo_file = io.BytesIO(img_response.content)
-        photo_file.name = "product_photo.jpg"
-
-        try:
-          bot.delete_message(message.chat.id, wait_msg.message_id)
-        except:
-          pass
-
-        bot.send_photo(
-            message.chat.id,
-            photo_file,
-            caption=(
-                "✨ **Готово! Професійне студійне фото товару створено** 📸🔥"
-            ),
-            parse_mode="Markdown",
-        )
-        success = True
-        break
-      else:
-        print(f"Помилка шлюзу {img_response.status_code}")
-    except Exception as e:
-      print(f"Збій спроби: {e}")
-
-  if not success:
-    bot.edit_message_text(
-        "❌ Сервер генерації тимчасово перевантажений. Спробуйте ще раз через"
-        " пару секунд!",
-        message.chat.id,
-        wait_msg.message_id,
-    )
+      bot.edit_message_text(
+          f"❌ Помилка: `{str(e)}`",
+          message.chat.id,
+          wait_msg.message_id,
+          parse_mode="Markdown",
+      )
+    except:
+      bot.reply_to(message, f"❌ Помилка: `{str(e)}`")
 
 
 if __name__ == "__main__":
@@ -176,7 +170,7 @@ if __name__ == "__main__":
     webhook_url = f"{render_url}/{TOKEN}"
     bot.remove_webhook()
     bot.set_webhook(url=webhook_url)
-    print(f"Webhook успішно встановлено на: {webhook_url}")
+    print(f"Webhook встановлено: {webhook_url}")
 
   port = int(os.environ.get("PORT", 10000))
   app.run(host="0.0.0.0", port=port)
