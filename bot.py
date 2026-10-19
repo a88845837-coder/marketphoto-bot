@@ -10,39 +10,34 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask("")
 
-# Точний словник для перекладу товарів
-translations = {
-    "годинник": "luxury wristwatch",
-    "годинники": "luxury wristwatches",
-    "кросівки": "stylish sports sneakers",
-    "парфуми": "luxury perfume bottle",
-    "сумка": "leather handbag",
-    "телефон": "modern smartphone",
-    "смартфон": "modern smartphone",
-    "навушники": "wireless headphones",
-    "окуляри": "stylish sunglasses",
-    "каблучка": "elegant diamond ring",
-    "кільце": "elegant diamond ring",
-    "кава": "cup of fresh artisanal coffee",
-    "книга": "hardcover book",
-    "футболка": "cotton t-shirt",
-    "куртка": "stylish winter jacket",
-}
+
+# Універсальна функція перекладу будь-якого тексту з української на англійську
+def translate_to_english(ukr_text):
+  try:
+    url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(ukr_text)}&langpair=uk|en"
+    response = requests.get(url, timeout=5)
+    if response.status_code == 200:
+      data = response.json()
+      translated = data.get("responseData", {}).get("translatedText", "")
+      if translated and not translated.startswith("MYMEMORY"):
+        return translated.strip()
+  except Exception as e:
+    print(f"Помилка перекладу: {e}")
+  return ukr_text
 
 
-def get_english_prompt(user_text):
-  lower_text = user_text.lower().strip()
-  base_subject = ""
-  for key, val in translations.items():
-    if key in lower_text:
-      base_subject = val
-      break
-  if not base_subject:
-    base_subject = f"commercial product of {user_text}"
+def get_universal_prompt(user_text):
+  # Динамічно перекладаємо те, що написав користувач
+  translated_subject = translate_to_english(user_text)
+  print(
+      f"Оригінал: '{user_text}' | Переклад англійською:"
+      f" '{translated_subject}'"
+  )
 
+  # Формуємо професійний студійний промпт для будь-якого товару
   return (
       f"Professional commercial e-commerce product photography of"
-      f" {base_subject}, studio softbox lighting, sharp focus,"
+      f" {translated_subject}, studio softbox lighting, sharp focus,"
       " hyper-realistic textures, isolated on a clean pure seamless white"
       " background, 8k resolution, catalogue style, advertising shot, highly"
       " detailed, NO humans, NO faces, NO people"
@@ -51,7 +46,7 @@ def get_english_prompt(user_text):
 
 @app.route("/")
 def home():
-  return "MarketPhoto AI Bot is running via Webhook 24/7! 🚀"
+  return "MarketPhoto AI Bot (Universal Dynamic) is running 24/7! 🚀"
 
 
 @app.route(f"/{TOKEN}", methods=["POST"])
@@ -70,9 +65,11 @@ def send_welcome(message):
   bot.reply_to(
       message,
       "👋 **Привіт! Я MarketPhoto AI** 📸\n\n"
-      "✨ Я твій професійний AI-генератор студійних фото товарів преміум-якості!\n\n"
-      "💬 Напиши назву товару (наприклад: *годинник*, *кросівки*) або"
-      " скористайся командою `/generate годинник`! 🚀",
+      "✨ Я твій універсальний AI-генератор студійних фото! Я можу згенерувати"
+      " **абсолютно будь-який товар**, який ти опишеш.\n\n"
+      "💬 Просто надішли мені назву або опис товару українською (наприклад:"
+      " *шкіряна сумка*, *рожевий тостер* або *фірмові кросівки з крилами*),"
+      " і я зроблю професійне фото! 🚀",
   )
 
 
@@ -84,9 +81,9 @@ def cmd_generate(message):
   else:
     bot.reply_to(
         message,
-        "🎨 **Режим преміум-генерації!**\n\nНапишіть назву товару після команди,"
-        " наприклад: `/generate годинник` або просто надішліть її текстом!"
-        " 📸✨",
+        "🎨 **Режим преміум-генерації!**\n\nНапишіть опис товару після команди,"
+        " наприклад: `/generate шкіряний гаманець` або просто надішліть його"
+        " текстом! 📸✨",
     )
 
 
@@ -98,21 +95,21 @@ def handle_message(message):
 
 
 def generate_and_send_photo(message, user_text):
-  print(f"Генерація для: {user_text}")
+  print(f"Запит на генерацію: {user_text}")
   bot.send_chat_action(message.chat.id, "upload_photo")
 
   wait_msg = bot.reply_to(
-      message, "⏳ **Генерую студійне фото товару...** Це може зайняти хвилину 🎨"
+      message,
+      "⏳ **Генерую студійне фото...** Перекладаю та створюю кадр 🎨",
   )
 
-  image_prompt = get_english_prompt(user_text)
+  image_prompt = get_universal_prompt(user_text)
   print(f"Фінальний промпт: {image_prompt}")
 
   try:
     encoded_prompt = urllib.parse.quote(image_prompt)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&model=flux&nologo=true"
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
 
-    # Додаємо заголовки браузера, щоб уникнути блокування запиту
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,"
@@ -120,7 +117,7 @@ def generate_and_send_photo(message, user_text):
         )
     }
     img_response = requests.get(image_url, headers=headers, timeout=120)
-    print(f"Статус відповіді від генератора: {img_response.status_code}")
+    print(f"Статус відповіді генератора: {img_response.status_code}")
 
     if img_response.status_code == 200:
       photo_file = io.BytesIO(img_response.content)
