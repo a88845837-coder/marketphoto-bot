@@ -146,8 +146,8 @@ def main_keyboard():
             KeyboardButton(text="🛒 Магазин зірок"),
         ],
         [
+            KeyboardButton(text="⚙️ Послуги / Функції"),
             KeyboardButton(text="🎨 Створити фото"),
-            KeyboardButton(text="⚙️ Послуги"),
         ],
         [
             KeyboardButton(text="ℹ️ Допомога"),
@@ -225,7 +225,7 @@ async def cmd_start(message: Message):
         f"Привіт, {message.from_user.first_name}! 👋\n\n"
         f"🤖 Ласкаво просимо до бота!\n"
         f"🎁 Кожен день вам доступно **{DAILY_FREE_LIMIT} безкоштовних генерацій**.\n"
-        f"Обирайте стиль або тисніть «🎨 Створити фото»."
+        f"Обирайте стиль або тисніть «⚙️ Послуги / Функції»."
     )
     await message.answer(text, reply_markup=main_keyboard(), parse_mode="Markdown")
 
@@ -260,14 +260,16 @@ async def cmd_profile(message: Message):
     await message.answer(profile_text, parse_mode="Markdown")
 
 
+# Виправлений виклику меню послуг для будь-якої назви кнопки
+@dp.message(F.text == "⚙️ Послуги / Функції")
 @dp.message(F.text == "🎨 Створити фото")
 @dp.message(F.text == "⚙️ Послуги")
 async def cmd_choose_type(message: Message):
     await message.answer(
         "📸 **Оберіть вид генерації:**\n\n"
         "1️⃣ **Стильна Аватарка** — ідеальні пропорції та чітке обличчя.\n"
-        "2️⃣ **Заставка / Шпалери** — висока деталізація для робочого столу або телефону.\n"
-        "3️⃣ **Художнє фото** — креативний стиль.",
+        "2️⃣ **Заставка / Шпалери** — висока деталізація для телефону чи ПК.\n"
+        "3️⃣ **Художнє фото** — креативний арт-стиль.",
         reply_markup=photo_type_keyboard(),
         parse_mode="Markdown",
     )
@@ -342,7 +344,7 @@ async def process_user_photo(message: Message, state: FSMContext):
     photo_file_id = message.photo[-1].file_id
 
     await message.answer(f"📸 Ваше фото обробляється ({style_name})...\n{info_text}")
-    
+
     await message.answer_photo(
         photo_file_id,
         caption=f"✨ **Готово!** Стиль: _{style_name}_\n\nЯкщо результатом незадоволені, натисніть кнопку нижче:",
