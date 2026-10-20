@@ -824,25 +824,13 @@ def extract_image_response(response: httpx.Response) -> bytes:
             detail,
         )
 
-                if 3030 in codes:
-            log.warning(
-                "Cloudflare safety rejection: HTTP=%s model=%s "
-                "request_id=%s",
-                response.status_code,
-                CF_MODEL,
-                response.headers.get("cf-ray", "unknown"),
-            )
+        if 3030 in codes:
             raise UserFacingError(
-                "⚠️ Cloudflare отклонил генерацию "
-                "(код 3030).\n\n"
-                "Это отказ на стороне сервиса генерации. "
-                "Он не доказывает, что твой запрос нарушает "
-                "правила.\n\n"
-                "💎 Лимит за неудачную генерацию возвращён.\n"
-                "Попробуй ещё раз позже. Если ошибка "
-                "повторяется даже с обычными игровыми "
-                "персонажами, проверь модель и обратись "
-                "в поддержку Cloudflare."
+                "Cloudflare отклонил запрос проверкой безопасности (код 3030). "
+                "Этот фильтр работает на стороне Cloudflare и не отключается настройкой бота. "
+                "Попробуй безопасное, нейтральное описание сцены без жестокости "
+                "и других деталей, которые могут быть неверно истолкованы. "
+                "Лимит за неудачную генерацию возвращён."
             )
 
         if 3036 in codes:
@@ -3004,4 +2992,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        log.info("MarketPhoto AI stopped")
+           
