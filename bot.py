@@ -1,4 +1,6 @@
 import asyncio
+import aiohttp
+from aiohttp import web
 import base64
 import html
 import io
@@ -9,10 +11,9 @@ import re
 import sqlite3
 import time
 import uuid
-from datetime import datetime, timezone
 
-import aiohttp
-from PIL import Image
+from datetime import datetime, timezone
+from PIL import Image, ImageOps
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
@@ -26,59 +27,79 @@ from aiogram.types import (
     InlineKeyboardButton,
     BufferedInputFile,
     LabeledPrice,
+    BotCommand,
 )
 
 # =========================================================
-# CONFIGURATION
+# CONFIG
 # =========================================================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-CLOUDFLARE_ACCOUNT_ID = os.getenv(
-    "CLOUDFLARE_ACCOUNT_ID", ""
-).strip()
-CLOUDFLARE_API_TOKEN = os.getenv(
-    "CLOUDFLARE_API_TOKEN", ""
+BOT_TOKEN = (
+    os.getenv("BOT_TOKEN")
+    or os.getenv("TELEGRAM_BOT_TOKEN")
+    or ""
 ).strip()
 
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
-PRICE_STARS = int(os.getenv("PRICE_STARS", "3"))
+CF_ACCOUNT_ID = (
+    os.getenv("CLOUDFLARE_ACCOUNT_ID")
+    or os.getenv("CF_ACCOUNT_ID")
+    or ""
+).strip()
+
+CF_API_TOKEN = (
+    os.getenv("CLOUDFLARE_API_TOKEN")
+    or os.getenv("CF_API_TOKEN")
+    or ""
+).strip()
+
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0") or "0")
+PRICE_STARS = max(1, int(os.getenv("PRICE_STARS", "3") or "3"))
+PORT = int(os.getenv("PORT", "10000"))
 
 MODEL = os.getenv(
     "CLOUDFLARE_MODEL",
-    "@cf/black-forest-labs/flux-2-klein-4b"
-)
+    "@cf/black-forest-labs/flux-2-klein-4b",
+).strip()
 
 FREE_LIMIT = 5
-DB_FILE = os.getenv("DATABASE_PATH", "marketphoto.db")
+DATABASE_PATH = os.getenv("DATABASE_PATH", "marketphoto.db")
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
+if not BOT_TOKEN:
+    raise RuntimeError(
+        "BOT_TOKEN is missing. Add BOT_TOKEN in Render Environment."
+    )
+
+if not CF_ACCOUNT_ID or not CF_API_TOKEN:
+    raise RuntimeError(
+        "Missing CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN."
+    )
+
+if ADMIN_ID <= 0:
+    raise RuntimeError(
+        "ADMIN_ID is missing. Set your numeric Telegram user ID."
+    )
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 
 log = logging.getLogger("marketphoto")
 
-if not BOT_TOKEN:
-    raise RuntimeError("Set BOT_TOKEN in Render Environment")
-
-if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_API_TOKEN:
-    raise RuntimeError(
-        "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN"
-    )
-
-if ADMIN_ID <= 0:
-    raise RuntimeError("Set ADMIN_ID to your numeric Telegram user ID")
-
 bot = Bot(
-    BOT_TOKEN,
+    token=BOT_TOKEN,
     default=DefaultBotProperties(parse_mode=ParseMode.HTML),
 )
 
 dp = Dispatcher()
 
-db = sqlite3.connect(DB_FILE, check_same_thread=False)
-db.row_factory = sqlite3.Row
+db = sqlite3.connect(
+    DATABASE_PATH,
+    check_same_thread=False,
+)
 
+db.row_factory = sqlite3.Row
 db.execute("PRAGMA journal_mode=WAL")
 
 http_session = None
@@ -102,6 +123,12 @@ def init_db():
         day TEXT NOT NULL,
         count INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (user_id, day)
+    );
+
+    CREATE TABLE IF NOT EXISTS pending_edits (
+        user_id INTEGER PRIMARY KEY,
+        image_bytes BLOB NOT NULL,
+        created_at INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -142,12 +169,6 @@ def init_db():
         status TEXT NOT NULL DEFAULT 'pending',
         created_at INTEGER NOT NULL
     );
-
-    CREATE TABLE IF NOT EXISTS pending_edits (
-        user_id INTEGER PRIMARY KEY,
-        image_bytes BLOB NOT NULL,
-        created_at INTEGER NOT NULL
-    );
     """)
     db.commit()
 
@@ -164,11 +185,7 @@ def register_user(user):
         ON CONFLICT(user_id)
         DO UPDATE SET username=excluded.username
         """,
-        (
-            user.id,
-            user.username,
-            int(time.time()),
-        ),
+        (user.id, user.username, int(time.time())),
     )
     db.commit()
 
@@ -188,14 +205,14 @@ def used_today(user_id):
     return int(row["count"]) if row else 0
 
 
-def free_left(user_id):
+def remaining_today(user_id):
     if user_id == ADMIN_ID:
         return "∞"
 
     return max(0, FREE_LIMIT - used_today(user_id))
 
 
-def use_one_free_generation(user_id):
+def increment_usage(user_id):
     if user_id == ADMIN_ID:
         return
 
@@ -212,7 +229,7 @@ def use_one_free_generation(user_id):
 
 
 # =========================================================
-# KEYBOARDS
+# MENUS
 # =========================================================
 
 def main_menu():
@@ -221,25 +238,25 @@ def main_menu():
             [
                 InlineKeyboardButton(
                     text="🎨 Создать изображение",
-                    callback_data="generate",
+                    callback_data="menu_generate",
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="🖼 Редактировать фото",
-                    callback_data="edit",
+                    callback_data="menu_edit",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="⭐ Купить генерацию",
-                    callback_data="buy",
+                    text="⭐ Оплата и генерации",
+                    callback_data="menu_payment",
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="📊 Мой лимит",
-                    callback_data="limit",
+                    callback_data="menu_limit",
                 )
             ],
         ]
@@ -259,32 +276,27 @@ def defect_keyboard(generation_id):
     )
 
 
-def admin_complaint_keyboard(complaint_id, has_paid_generation):
-    rows = [
-        [
-            InlineKeyboardButton(
-                text="✅ Подтвердить брак",
-                callback_data=f"accept:{complaint_id}",
-            ),
-            InlineKeyboardButton(
-                text="❌ Отклонить",
-                callback_data=f"reject:{complaint_id}",
-            ),
+def admin_complaint_keyboard(complaint_id):
+    # Refund is offered only after the admin confirms the defect.
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Подтвердить брак",
+                    callback_data=f"complaint_accept:{complaint_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Отклонить жалобу",
+                    callback_data=f"complaint_reject:{complaint_id}",
+                )
+            ],
         ]
-    ]
-
-    if has_paid_generation:
-        rows.append([
-            InlineKeyboardButton(
-                text="⭐ Вернуть Stars",
-                callback_data=f"refund:{complaint_id}",
-            )
-        ])
-
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    )
 
 
-def refund_only_keyboard(complaint_id):
+def refund_keyboard(complaint_id):
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -298,15 +310,56 @@ def refund_only_keyboard(complaint_id):
 
 
 # =========================================================
-# CLOUDFLARE IMAGE GENERATION
+# SAFETY FOR PHOTO EDITING
+# =========================================================
+
+def disallowed_prompt(prompt):
+    """
+    Block instructions intended to undress a real person.
+    Normal clothing, fashion, hairstyle and background edits
+    are still available.
+    """
+    blocked_phrases = [
+        "раздеть",
+        "раздевает",
+        "раздевать",
+        "снять одежду",
+        "убрать одежду",
+        "без одежды",
+        "обнажить",
+        "обнаженная",
+        "обнажённая",
+        "обнаженный",
+        "обнажённый",
+        "голая",
+        "голый",
+        "голое тело",
+        "undress",
+        "naked",
+        "nude",
+        "remove her clothes",
+        "remove his clothes",
+    ]
+
+    normalized = prompt.lower()
+
+    return any(
+        phrase in normalized
+        for phrase in blocked_phrases
+    )
+
+
+# =========================================================
+# CLOUDFLARE FLUX.2 KLEIN
 # =========================================================
 
 async def cloudflare_generate(prompt, image_bytes=None):
     """
-    FLUX.2 Klein accepts multipart/form-data.
+    FLUX.2 Klein requires multipart/form-data even when there
+    is no reference image. force_multipart=True is important.
 
-    For editing, the reference image is resized to no more
-    than 512x512 before being sent as input_image_0.
+    Reference images are resized so both dimensions are
+    below 512 pixels, as required by the model's API.
     """
 
     global http_session
@@ -317,10 +370,11 @@ async def cloudflare_generate(prompt, image_bytes=None):
 
     url = (
         "https://api.cloudflare.com/client/v4/accounts/"
-        f"{CLOUDFLARE_ACCOUNT_ID}/ai/run/{MODEL}"
+        f"{CF_ACCOUNT_ID}/ai/run/{MODEL}"
     )
 
-    form = aiohttp.FormData()
+    # Force multipart even for text-only generations.
+    form = aiohttp.FormData(force_multipart=True)
 
     form.add_field("prompt", prompt)
     form.add_field("width", "1024")
@@ -328,28 +382,28 @@ async def cloudflare_generate(prompt, image_bytes=None):
 
     if image_bytes:
         try:
-            image = Image.open(io.BytesIO(image_bytes))
-            image = image.convert("RGB")
-            image.thumbnail((512, 512))
+            with Image.open(io.BytesIO(image_bytes)) as opened:
+                image = ImageOps.exif_transpose(opened).convert("RGB")
+                image.thumbnail((511, 511))
 
-            output = io.BytesIO()
-            image.save(output, format="PNG")
-            resized_image = output.getvalue()
+                output = io.BytesIO()
+                image.save(output, format="JPEG", quality=90)
+                reference = output.getvalue()
 
         except Exception as exc:
             raise RuntimeError(
-                f"Invalid uploaded image: {exc}"
+                f"Cannot read uploaded image: {exc}"
             ) from exc
 
         form.add_field(
             "input_image_0",
-            resized_image,
-            filename="input.png",
-            content_type="image/png",
+            reference,
+            filename="reference.jpg",
+            content_type="image/jpeg",
         )
 
     headers = {
-        "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
+        "Authorization": f"Bearer {CF_API_TOKEN}",
     }
 
     async with http_session.post(
@@ -361,48 +415,48 @@ async def cloudflare_generate(prompt, image_bytes=None):
         raw = await response.read()
 
         if response.status >= 400:
-            details = raw.decode(
-                "utf-8", errors="replace"
+            detail = raw.decode(
+                "utf-8",
+                errors="replace",
             )[:1500]
 
             log.error(
                 "Cloudflare HTTP %s: %s",
                 response.status,
-                details,
+                detail,
             )
 
             raise RuntimeError(
-                f"Cloudflare HTTP {response.status}: {details}"
+                f"Cloudflare HTTP {response.status}: {detail}"
             )
 
         content_type = response.headers.get(
-            "Content-Type", ""
+            "Content-Type",
+            "",
         ).lower()
 
-        # Direct image response
+        # Some endpoints return the image directly.
         if content_type.startswith("image/"):
             return raw
 
-        # Also recognize raw PNG/JPEG responses
         if raw.startswith(b"\x89PNG") or raw.startswith(b"\xff\xd8"):
             return raw
 
-        # Some errors and responses are JSON
         try:
             data = json.loads(raw.decode("utf-8"))
         except Exception as exc:
             raise RuntimeError(
-                f"Unexpected Cloudflare response: {raw[:300]!r}"
+                f"Unknown Cloudflare response: {raw[:300]!r}"
             ) from exc
 
         if data.get("success") is False or data.get("errors"):
-            details = json.dumps(
+            detail = json.dumps(
                 data.get("errors") or data.get("messages"),
                 ensure_ascii=False,
             )[:1000]
 
             raise RuntimeError(
-                f"Cloudflare rejected parameters: {details}"
+                f"Cloudflare rejected request: {detail}"
             )
 
         result = data.get("result", data)
@@ -426,40 +480,13 @@ async def cloudflare_generate(prompt, image_bytes=None):
                     pass
 
         raise RuntimeError(
-            "Cloudflare response did not contain an image"
+            "Cloudflare response did not contain image data."
         )
 
 
 # =========================================================
-# GENERATION / EDITING
+# SAVE AND SEND GENERATED IMAGE
 # =========================================================
-
-def prompt_is_disallowed(prompt):
-    """
-    Do not use the bot to undress real people.
-    Clothing/style edits are permitted.
-    """
-    blocked_terms = [
-        r"\bundress\b",
-        r"\bnaked\b",
-        r"\bnude\b",
-        r"раздеть",
-        r"раздевает",
-        r"снять одежду",
-        r"без одежды",
-        r"обнажить",
-        r"голая",
-        r"голый",
-        r"голое тело",
-    ]
-
-    lowered = prompt.lower()
-
-    return any(
-        re.search(term, lowered)
-        for term in blocked_terms
-    )
-
 
 async def send_generated(
     message,
@@ -469,9 +496,7 @@ async def send_generated(
     charge_id=None,
     stars_paid=0,
 ):
-    user_id = message.from_user.id
-
-    status_message = await message.answer(
+    status = await message.answer(
         "⏳ Создаю изображение..."
     )
 
@@ -482,7 +507,7 @@ async def send_generated(
         )
 
         if not image or len(image) < 100:
-            raise RuntimeError("Empty image response")
+            raise RuntimeError("Cloudflare returned an empty image")
 
         sent = await message.answer_photo(
             BufferedInputFile(
@@ -491,7 +516,7 @@ async def send_generated(
             ),
             caption=(
                 "✨ Готово!\n"
-                "Если изображение испорчено, нажми «Брак»."
+                "Если фото получилось испорченным, нажми «Брак»."
             ),
         )
 
@@ -504,7 +529,7 @@ async def send_generated(
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                user_id,
+                message.from_user.id,
                 prompt,
                 kind,
                 sent.photo[-1].file_id,
@@ -521,38 +546,43 @@ async def send_generated(
             reply_markup=defect_keyboard(generation_id)
         )
 
-        await status_message.delete()
-
-        await message.answer(
-            f"📊 Бесплатных генераций осталось: "
-            f"<b>{free_left(user_id) if user_id != ADMIN_ID else '∞'}</b>"
-        )
+        try:
+            await status.delete()
+        except Exception:
+            pass
 
         return True
 
     except Exception as exc:
         log.exception(
             "Generation failed for user_id=%s",
-            user_id,
+            message.from_user.id,
         )
 
-        await status_message.edit_text(
-            "❌ Не удалось создать изображение.\n\n"
-            "Попробуй изменить описание. Если ошибка повторяется, "
-            "проверь Render Logs.\n\n"
-            f"<code>{html.escape(str(exc)[:700])}</code>"
-        )
+        try:
+            await status.edit_text(
+                "❌ Не удалось создать изображение.\n\n"
+                "Попробуй другой запрос. Если ошибка повторяется, "
+                "проверь Render Logs.\n\n"
+                f"<code>{html.escape(str(exc)[:700])}</code>"
+            )
+        except Exception:
+            pass
 
         return False
 
 
-async def create_stars_invoice(
+# =========================================================
+# FREE GENERATIONS AND PAID ORDERS
+# =========================================================
+
+async def create_paid_order(
     message,
     prompt,
     kind,
     image_bytes=None,
 ):
-    payload = "mp:" + uuid.uuid4().hex
+    payload = "marketphoto_" + uuid.uuid4().hex
 
     db.execute(
         """
@@ -576,8 +606,8 @@ async def create_stars_invoice(
     try:
         await bot.send_invoice(
             chat_id=message.chat.id,
-            title="MarketPhoto AI — генерация",
-            description="Одна генерация или редактирование фотографии",
+            title="MarketPhoto AI — 1 генерация",
+            description="Одна генерация или редактирование фото",
             payload=payload,
             provider_token="",
             currency="XTR",
@@ -590,16 +620,17 @@ async def create_stars_invoice(
         )
 
     except Exception:
+        log.exception("Failed to create Stars invoice")
+
         db.execute(
             "DELETE FROM orders WHERE payload=?",
             (payload,),
         )
         db.commit()
-        log.exception("Could not create Stars invoice")
 
         await message.answer(
-            "Не удалось создать счёт Telegram Stars. "
-            "Проверь настройки платежей и Render Logs."
+            "Не удалось создать счёт Stars. "
+            "Проверь настройки бота и Render Logs."
         )
 
 
@@ -611,42 +642,56 @@ async def start_generation(
 ):
     user_id = message.from_user.id
 
-    if prompt_is_disallowed(prompt):
+    if not prompt.strip():
+        await message.answer("Напиши описание изображения.")
+        return
+
+    if disallowed_prompt(prompt):
         await message.answer(
             "Я не могу помогать с раздеванием реальных людей. "
-            "Можно изменить одежду, цвет, фасон, причёску, "
-            "освещение или фон."
+            "Можно изменить одежду, фасон, цвет, причёску, "
+            "фон или художественный стиль."
         )
         return
 
-    # Admin bypasses the daily limit and payment.
+    # Administrator always has unlimited free generation.
     if user_id == ADMIN_ID:
         async with generation_lock:
-            await send_generated(
+            success = await send_generated(
                 message,
                 prompt,
                 kind,
                 image_bytes,
             )
+
+        if success:
+            await message.answer(
+                "👑 Администраторский безлимит: ∞ генераций."
+            )
+
         return
 
-    if used_today(user_id) < FREE_LIMIT:
-        async with generation_lock:
-            # Recheck after waiting for the lock
-            if used_today(user_id) < FREE_LIMIT:
-                success = await send_generated(
-                    message,
-                    prompt,
-                    kind,
-                    image_bytes,
+    # Check the free limit while holding the generation lock.
+    async with generation_lock:
+        if used_today(user_id) < FREE_LIMIT:
+            success = await send_generated(
+                message,
+                prompt,
+                kind,
+                image_bytes,
+            )
+
+            if success:
+                increment_usage(user_id)
+                await message.answer(
+                    f"🎁 Бесплатных генераций осталось: "
+                    f"<b>{remaining_today(user_id)}</b> из {FREE_LIMIT}."
                 )
 
-                if success:
-                    use_one_free_generation(user_id)
+            return
 
-                return
-
-    await create_stars_invoice(
+    # Five free generations have been used.
+    await create_paid_order(
         message,
         prompt,
         kind,
@@ -655,42 +700,59 @@ async def start_generation(
 
 
 # =========================================================
-# START / MENU / COMMANDS
+# START AND COMMANDS
 # =========================================================
 
 @dp.message(CommandStart())
-async def cmd_start(message: Message):
+async def start_command(message: Message):
     register_user(message.from_user)
 
     await message.answer(
-        "👋 <b>MarketPhoto AI</b>\n\n"
-        "🎨 Генерация изображений по описанию\n"
-        "🖼 Редактирование загруженных фотографий\n"
-        f"🎁 {FREE_LIMIT} бесплатных генераций ежедневно\n"
-        "⭐ Дополнительные генерации за Telegram Stars\n"
+        "👋 <b>Добро пожаловать в MarketPhoto AI!</b>\n\n"
+        "🎨 Генерация фото по описанию\n"
+        "🖼 Редактирование изображений\n"
+        "🎁 5 бесплатных генераций ежедневно\n"
+        "⭐ Дополнительные генерации через Telegram Stars\n"
         "❌ Кнопка «Брак» под каждым результатом\n\n"
-        "Администратор имеет безлимит.\n"
-        "Используй редактирование ответственно и не создавай "
-        "интимные изображения реальных людей без их согласия.",
+        "👑 Администратор имеет безлимитные генерации.",
         reply_markup=main_menu(),
     )
 
 
 @dp.message(Command("help"))
-async def cmd_help(message: Message):
+async def help_command(message: Message):
     await message.answer(
-        "Как пользоваться:\n\n"
-        "1. Напиши описание, чтобы создать изображение.\n"
-        "2. Чтобы отредактировать фото, отправь изображение "
-        "и следующим сообщением опиши изменения.\n"
-        "3. После бесплатного лимита бот предложит оплату Stars.\n"
-        "4. Если изображение испорчено, нажми «Брак» под ним.\n\n"
-        "Команда /cancel отменяет ожидание фото."
+        "Как пользоваться ботом:\n\n"
+        "1. Нажми «Создать изображение» и напиши описание.\n"
+        "2. Для редактирования отправь фото, затем опиши изменения.\n"
+        "3. После бесплатного лимита оплати следующую генерацию Stars.\n"
+        "4. Если изображение испорчено, нажми «Брак».\n\n"
+        "/limit — проверить лимит\n"
+        "/cancel — отменить ожидание фото\n"
+        "/admin — статистика администратора",
+        reply_markup=main_menu(),
     )
 
 
+@dp.message(Command("limit"))
+async def limit_command(message: Message):
+    register_user(message.from_user)
+
+    user_id = message.from_user.id
+
+    if user_id == ADMIN_ID:
+        await message.answer(
+            "👑 Ваш лимит: <b>без ограничений</b>."
+        )
+    else:
+        await message.answer(
+            f"Использовано сегодня: {used_today(user_id)}/{FREE_LIMIT}\n"
+            f"Осталось: {remaining_today(user_id)}"
+        )
+
+
 @dp.message(Command("cancel"))
-async def cmd_cancel(message: Message):
+async def cancel_command(message: Message):
     db.execute(
         "DELETE FROM pending_edits WHERE user_id=?",
         (message.from_user.id,),
@@ -698,14 +760,15 @@ async def cmd_cancel(message: Message):
     db.commit()
 
     await message.answer(
-        "Ожидание фотографии отменено.",
+        "Ожидание фото отменено.",
         reply_markup=main_menu(),
     )
 
 
 @dp.message(Command("admin"))
-async def cmd_admin(message: Message):
+async def admin_command(message: Message):
     if message.from_user.id != ADMIN_ID:
+        await message.answer("Эта команда доступна только администратору.")
         return
 
     users = db.execute(
@@ -720,81 +783,84 @@ async def cmd_admin(message: Message):
         "SELECT COUNT(*) AS n FROM complaints WHERE status='pending'"
     ).fetchone()["n"]
 
-    revenue = db.execute(
-        "SELECT COALESCE(SUM(stars), 0) AS n FROM payments WHERE refunded=0"
+    income = db.execute(
+        """
+        SELECT COALESCE(SUM(stars), 0) AS n
+        FROM payments WHERE refunded=0
+        """
     ).fetchone()["n"]
 
     await message.answer(
         "🛠 <b>Панель администратора</b>\n\n"
         f"Пользователей: {users}\n"
-        f"Генераций: {generations}\n"
-        f"Ожидающих жалоб: {complaints}\n"
-        f"Stars по не возвращённым платежам: {revenue}\n\n"
-        "Ваш лимит генераций: ∞"
+        f"Всего изображений: {generations}\n"
+        f"Новых жалоб: {complaints}\n"
+        f"Невозвращённых Stars: {income}\n\n"
+        "Ваш лимит: ∞"
     )
 
 
-@dp.callback_query(F.data == "generate")
+# =========================================================
+# MAIN MENU CALLBACKS
+# =========================================================
+
+@dp.callback_query(F.data == "menu_generate")
 async def menu_generate(call: CallbackQuery):
     await call.answer()
     await call.message.answer(
-        "Напиши описание изображения, которое хочешь создать."
+        "Напиши описание изображения, которое нужно создать."
     )
 
 
-@dp.callback_query(F.data == "edit")
+@dp.callback_query(F.data == "menu_edit")
 async def menu_edit(call: CallbackQuery):
     await call.answer()
     await call.message.answer(
-        "Отправь фотографию, которую хочешь изменить. "
-        "Затем напиши, что именно нужно изменить."
+        "Отправь фотографию, которую нужно отредактировать. "
+        "Следующим сообщением напиши, что изменить."
     )
 
 
-@dp.callback_query(F.data == "limit")
-async def menu_limit(call: CallbackQuery):
-    await call.answer()
-
-    user_id = call.from_user.id
-
-    if user_id == ADMIN_ID:
-        await call.message.answer(
-            "👑 Ваш лимит: <b>без ограничений</b>."
-        )
-    else:
-        await call.message.answer(
-            f"Сегодня использовано: {used_today(user_id)}/{FREE_LIMIT}\n"
-            f"Осталось: {free_left(user_id)}"
-        )
-
-
-@dp.callback_query(F.data == "buy")
-async def menu_buy(call: CallbackQuery):
+@dp.callback_query(F.data == "menu_payment")
+async def menu_payment(call: CallbackQuery):
     await call.answer()
 
     if call.from_user.id == ADMIN_ID:
         await call.message.answer(
-            "Для администратора все генерации бесплатны."
+            "👑 Для администратора генерации бесплатны и не ограничены."
         )
     else:
         await call.message.answer(
-            f"После бесплатного лимита одна генерация "
-            f"стоит {PRICE_STARS} Telegram Stars. "
-            "Напиши свой запрос, и бот предложит оплату."
+            f"🎁 Бесплатно: {FREE_LIMIT} генераций в день.\n"
+            f"⭐ Затем каждая генерация стоит {PRICE_STARS} Stars."
+        )
+
+
+@dp.callback_query(F.data == "menu_limit")
+async def menu_limit(call: CallbackQuery):
+    await call.answer()
+
+    if call.from_user.id == ADMIN_ID:
+        await call.message.answer(
+            "👑 Ваш лимит: <b>∞</b>."
+        )
+    else:
+        await call.message.answer(
+            f"Использовано сегодня: {used_today(call.from_user.id)}/{FREE_LIMIT}\n"
+            f"Осталось: {remaining_today(call.from_user.id)}"
         )
 
 
 # =========================================================
-# PHOTO UPLOAD AND TEXT PROMPTS
+# PHOTO UPLOAD AND EDITING
 # =========================================================
 
 @dp.message(F.photo)
 async def receive_photo(message: Message):
     register_user(message.from_user)
 
-    photo = message.photo[-1]
-
     try:
+        photo = message.photo[-1]
         telegram_file = await bot.get_file(photo.file_id)
 
         buffer = io.BytesIO()
@@ -804,15 +870,15 @@ async def receive_photo(message: Message):
             destination=buffer,
         )
 
-        raw_image = buffer.getvalue()
+        image_bytes = buffer.getvalue()
 
-        if len(raw_image) > 10 * 1024 * 1024:
+        if len(image_bytes) > MAX_UPLOAD_SIZE:
             await message.answer(
                 "Фото слишком большое. Отправь изображение до 10 МБ."
             )
             return
 
-        # Store uploaded image until the user's instruction arrives.
+        # Save image while waiting for the edit instruction.
         db.execute(
             """
             INSERT INTO pending_edits(user_id, image_bytes, created_at)
@@ -824,30 +890,45 @@ async def receive_photo(message: Message):
             """,
             (
                 message.from_user.id,
-                raw_image,
+                image_bytes,
                 int(time.time()),
             ),
         )
         db.commit()
 
-        await message.answer(
-            "📷 Фото получено!\n\n"
-            "Теперь напиши, что изменить: одежду, причёску, "
-            "фон, освещение, цвета или художественный стиль."
-        )
+        # If user added a caption, use it as the edit prompt.
+        if message.caption and message.caption.strip():
+            db.execute(
+                "DELETE FROM pending_edits WHERE user_id=?",
+                (message.from_user.id,),
+            )
+            db.commit()
+
+            await start_generation(
+                message,
+                message.caption.strip(),
+                kind="edit",
+                image_bytes=image_bytes,
+            )
+        else:
+            await message.answer(
+                "📷 Фото получено!\n\n"
+                "Теперь напиши, что изменить: одежду, фон, "
+                "причёску, освещение, цвета или художественный стиль."
+            )
 
     except Exception:
-        log.exception("Failed to download uploaded photo")
+        log.exception("Photo upload error")
         await message.answer(
-            "Не удалось загрузить фото. Попробуй отправить его ещё раз."
+            "Не удалось обработать фотографию. Попробуй отправить её ещё раз."
         )
 
 
 @dp.message(F.text)
 async def receive_text(message: Message):
-    text = message.text.strip()
+    prompt = (message.text or "").strip()
 
-    if not text or text.startswith("/"):
+    if not prompt or prompt.startswith("/"):
         return
 
     register_user(message.from_user)
@@ -868,7 +949,7 @@ async def receive_text(message: Message):
 
         await start_generation(
             message,
-            text,
+            prompt,
             kind="edit",
             image_bytes=image_bytes,
         )
@@ -876,41 +957,43 @@ async def receive_text(message: Message):
     else:
         await start_generation(
             message,
-            text,
+            prompt,
             kind="text",
         )
 
 
 # =========================================================
-# TELEGRAM STARS PAYMENTS
+# TELEGRAM STARS PAYMENT
 # =========================================================
 
 @dp.pre_checkout_query()
-async def pre_checkout(pre_checkout_query: PreCheckoutQuery):
-    payload = pre_checkout_query.invoice_payload
-
+async def pre_checkout(query: PreCheckoutQuery):
     order = db.execute(
         "SELECT * FROM orders WHERE payload=?",
-        (payload,),
+        (query.invoice_payload,),
     ).fetchone()
 
-    if (
-        not order
-        or order["user_id"] != pre_checkout_query.from_user.id
-    ):
-        await pre_checkout_query.answer(
+    if not order or order["user_id"] != query.from_user.id:
+        await query.answer(
             ok=False,
-            error_message="Заказ не найден или принадлежит другому пользователю.",
+            error_message="Заказ не найден.",
         )
         return
 
-    await pre_checkout_query.answer(ok=True)
+    if query.currency != "XTR" or query.total_amount != PRICE_STARS:
+        await query.answer(
+            ok=False,
+            error_message="Неверная сумма платежа.",
+        )
+        return
+
+    await query.answer(ok=True)
 
 
 async def refund_stars(charge_id, user_id):
     """
-    Uses Telegram's Stars refund method.
-    The call succeeds before the database is marked refunded.
+    Returns actual Telegram Stars through Telegram's Bot API.
+    Database is updated only after Telegram confirms the refund.
     """
     await bot.refund_star_payment(
         user_id=user_id,
@@ -933,10 +1016,22 @@ async def refund_stars(charge_id, user_id):
 @dp.message(F.successful_payment)
 async def successful_payment(message: Message):
     payment = message.successful_payment
-
     user_id = message.from_user.id
+
     payload = payment.invoice_payload
     charge_id = payment.telegram_payment_charge_id
+
+    # Prevent duplicate processing of the same Telegram charge.
+    already_processed = db.execute(
+        "SELECT charge_id FROM payments WHERE charge_id=?",
+        (charge_id,),
+    ).fetchone()
+
+    if already_processed:
+        await message.answer(
+            "Этот платёж уже обработан."
+        )
+        return
 
     order = db.execute(
         "SELECT * FROM orders WHERE payload=?",
@@ -945,31 +1040,29 @@ async def successful_payment(message: Message):
 
     if not order or order["user_id"] != user_id:
         log.error(
-            "Payment received without a valid order: user=%s payload=%s",
+            "Payment without valid order: user=%s payload=%s",
             user_id,
             payload,
         )
 
-        try:
-            await refund_stars(charge_id, user_id)
-            await message.answer(
-                "Заказ не найден. Оплата возвращена автоматически."
-            )
-        except Exception:
-            log.exception("Could not refund orphaned Stars payment")
-            await bot.send_message(
-                ADMIN_ID,
-                "⚠️ Получен платёж без найденного заказа.\n"
-                f"User ID: <code>{user_id}</code>\n"
-                f"Charge ID: <code>{html.escape(charge_id)}</code>",
-            )
+        await bot.send_message(
+            ADMIN_ID,
+            "⚠️ Оплата без найденного заказа.\n"
+            f"User ID: <code>{user_id}</code>\n"
+            f"Charge ID: <code>{html.escape(charge_id)}</code>",
+        )
 
+        await message.answer(
+            "Платёж получен, но заказ не найден. "
+            "Администратор проверит ситуацию."
+        )
         return
 
     db.execute(
         """
-        INSERT OR IGNORE INTO payments(
-            charge_id, user_id, payload, stars, refunded, created_at
+        INSERT INTO payments(
+            charge_id, user_id, payload, stars,
+            refunded, created_at
         )
         VALUES (?, ?, ?, ?, 0, ?)
         """,
@@ -983,10 +1076,12 @@ async def successful_payment(message: Message):
     )
     db.commit()
 
-    await message.answer("⭐ Оплата получена. Создаю изображение...")
+    await message.answer(
+        "⭐ Оплата получена. Начинаю генерацию..."
+    )
 
     async with generation_lock:
-        ok = await send_generated(
+        success = await send_generated(
             message,
             order["prompt"],
             kind=order["kind"],
@@ -995,7 +1090,7 @@ async def successful_payment(message: Message):
             stars_paid=payment.total_amount,
         )
 
-    if ok:
+    if success:
         db.execute(
             "DELETE FROM orders WHERE payload=?",
             (payload,),
@@ -1003,36 +1098,39 @@ async def successful_payment(message: Message):
         db.commit()
         return
 
-    # Generation failed after payment: attempt automatic refund.
+    # Automatic refund if generation fails after payment.
     try:
         await refund_stars(charge_id, user_id)
 
+        db.execute(
+            "DELETE FROM orders WHERE payload=?",
+            (payload,),
+        )
+        db.commit()
+
         await message.answer(
-            "Платное создание не удалось, поэтому Stars возвращены."
+            "Генерация не удалась. Оплата Stars возвращена."
         )
 
     except Exception:
-        log.exception(
-            "Automatic refund failed for charge_id=%s",
-            charge_id,
-        )
+        log.exception("Automatic Stars refund failed")
 
         await message.answer(
-            "Генерация не удалась, а автоматическое возвращение Stars "
-            "не прошло. Администратор проверит платёж вручную."
+            "Генерация не удалась, а автоматический возврат не прошёл. "
+            "Администратор проверит платёж."
         )
 
         await bot.send_message(
             ADMIN_ID,
-            "⚠️ Не удалось автоматически вернуть Stars.\n"
+            "⚠️ Не удалось вернуть Stars автоматически.\n"
             f"User ID: <code>{user_id}</code>\n"
             f"Charge ID: <code>{html.escape(charge_id)}</code>\n"
-            f"Количество Stars: {payment.total_amount}",
+            f"Сумма: {payment.total_amount} Stars",
         )
 
 
 # =========================================================
-# DEFECT REPORT BUTTON
+# BUTTON: "БРАК"
 # =========================================================
 
 @dp.callback_query(F.data.startswith("defect:"))
@@ -1040,7 +1138,10 @@ async def defect_button(call: CallbackQuery):
     try:
         generation_id = int(call.data.split(":")[1])
     except (ValueError, IndexError):
-        await call.answer("Некорректный запрос.", show_alert=True)
+        await call.answer(
+            "Некорректный запрос.",
+            show_alert=True,
+        )
         return
 
     generation = db.execute(
@@ -1057,7 +1158,7 @@ async def defect_button(call: CallbackQuery):
 
     if generation["complaint_status"] != "none":
         await call.answer(
-            "Жалобу на это изображение уже отправлено.",
+            "Жалоба уже отправлена.",
             show_alert=True,
         )
         return
@@ -1086,10 +1187,11 @@ async def defect_button(call: CallbackQuery):
         """,
         (generation_id,),
     )
-
     db.commit()
 
-    await call.answer("Жалобу отправлено администратору.")
+    await call.answer(
+        "Жалоба отправлена администратору."
+    )
 
     username = (
         "@" + call.from_user.username
@@ -1101,16 +1203,10 @@ async def defect_button(call: CallbackQuery):
         f"🚨 <b>Жалоба на изображение #{generation_id}</b>\n\n"
         f"Жалоба: <code>{complaint_id}</code>\n"
         f"Пользователь: {html.escape(username)}\n"
-        f"User ID: <code>{call.from_user.id}</code>\n"
+        f"ID пользователя: <code>{call.from_user.id}</code>\n"
         f"Тип: {html.escape(generation['kind'])}\n"
-        f"Запрос: {html.escape(generation['prompt'][:500])}\n"
-        f"Оплачено Stars: {generation['stars_paid']}"
-    )
-
-    has_paid = bool(
-        generation["charge_id"]
-        and generation["stars_paid"] > 0
-        and not generation["refunded"]
+        f"Запрос: {html.escape(generation['prompt'][:350])}\n"
+        f"Оплата: {generation['stars_paid']} Stars"
     )
 
     try:
@@ -1119,50 +1215,53 @@ async def defect_button(call: CallbackQuery):
             photo=generation["photo_file_id"],
             caption=caption,
             reply_markup=admin_complaint_keyboard(
-                complaint_id,
-                has_paid,
+                complaint_id
             ),
         )
 
     except Exception:
-        log.exception("Could not forward complaint to admin")
+        log.exception(
+            "Could not send complaint photo to administrator"
+        )
 
         await bot.send_message(
             ADMIN_ID,
             caption,
             reply_markup=admin_complaint_keyboard(
-                complaint_id,
-                has_paid,
+                complaint_id
             ),
         )
 
 
 # =========================================================
-# ADMIN COMPLAINT HANDLING
+# ADMIN: ACCEPT OR REJECT COMPLAINT
 # =========================================================
 
 async def resolve_complaint(call, decision):
     if call.from_user.id != ADMIN_ID:
         await call.answer(
-            "Только администратор может обрабатывать жалобы.",
+            "Только администратор может выполнять это действие.",
             show_alert=True,
         )
         return
 
-    complaint_id = int(call.data.split(":")[1])
+    try:
+        complaint_id = int(call.data.split(":")[1])
+    except (ValueError, IndexError):
+        await call.answer(
+            "Некорректная жалоба.",
+            show_alert=True,
+        )
+        return
 
     complaint = db.execute(
         "SELECT * FROM complaints WHERE id=?",
         (complaint_id,),
     ).fetchone()
 
-    if not complaint:
-        await call.answer("Жалоба не найдена.", show_alert=True)
-        return
-
-    if complaint["status"] not in ("pending",):
+    if not complaint or complaint["status"] != "pending":
         await call.answer(
-            "Жалоба уже обработана.",
+            "Жалоба уже обработана или не найдена.",
             show_alert=True,
         )
         return
@@ -1178,7 +1277,11 @@ async def resolve_complaint(call, decision):
     )
 
     db.execute(
-        "UPDATE generations SET complaint_status=? WHERE id=?",
+        """
+        UPDATE generations
+        SET complaint_status=?
+        WHERE id=?
+        """,
         (decision, complaint["generation_id"]),
     )
 
@@ -1189,14 +1292,16 @@ async def resolve_complaint(call, decision):
             complaint["user_id"],
             "✅ Администратор подтвердил брак изображения.",
         )
-
     else:
         await bot.send_message(
             complaint["user_id"],
-            "❌ Администратор проверил жалобу, но не подтвердил брак.",
+            "❌ Администратор проверил жалобу, "
+            "но не подтвердил брак.",
         )
 
-    has_paid = bool(
+    # Refund button appears only after the admin approves
+    # a paid generation complaint.
+    has_paid_payment = bool(
         decision == "accepted"
         and generation
         and generation["charge_id"]
@@ -1205,29 +1310,35 @@ async def resolve_complaint(call, decision):
     )
 
     try:
-        if has_paid:
+        if has_paid_payment:
             await call.message.edit_reply_markup(
-                reply_markup=refund_only_keyboard(complaint_id)
+                reply_markup=refund_keyboard(complaint_id)
             )
         else:
             await call.message.edit_reply_markup(
                 reply_markup=None
             )
     except Exception:
-        log.exception("Could not update complaint keyboard")
+        log.exception("Could not update complaint buttons")
 
-    await call.answer("Решение сохранено.")
+    await call.answer(
+        "Решение сохранено."
+    )
 
 
-@dp.callback_query(F.data.startswith("accept:"))
+@dp.callback_query(F.data.startswith("complaint_accept:"))
 async def accept_complaint(call: CallbackQuery):
     await resolve_complaint(call, "accepted")
 
 
-@dp.callback_query(F.data.startswith("reject:"))
+@dp.callback_query(F.data.startswith("complaint_reject:"))
 async def reject_complaint(call: CallbackQuery):
     await resolve_complaint(call, "rejected")
 
+
+# =========================================================
+# ADMIN: REFUND STARS
+# =========================================================
 
 @dp.callback_query(F.data.startswith("refund:"))
 async def refund_complaint(call: CallbackQuery):
@@ -1238,20 +1349,23 @@ async def refund_complaint(call: CallbackQuery):
         )
         return
 
-    complaint_id = int(call.data.split(":")[1])
+    try:
+        complaint_id = int(call.data.split(":")[1])
+    except (ValueError, IndexError):
+        await call.answer(
+            "Некорректная жалоба.",
+            show_alert=True,
+        )
+        return
 
     complaint = db.execute(
         "SELECT * FROM complaints WHERE id=?",
         (complaint_id,),
     ).fetchone()
 
-    if not complaint:
-        await call.answer("Жалоба не найдена.", show_alert=True)
-        return
-
-    if complaint["status"] not in ("pending", "accepted"):
+    if not complaint or complaint["status"] != "accepted":
         await call.answer(
-            "Эту жалобу нельзя использовать для возврата.",
+            "Сначала нужно подтвердить брак.",
             show_alert=True,
         )
         return
@@ -1267,7 +1381,7 @@ async def refund_complaint(call: CallbackQuery):
         or generation["stars_paid"] <= 0
     ):
         await call.answer(
-            "У этой генерации нет связанного платежа Stars.",
+            "Это была бесплатная генерация.",
             show_alert=True,
         )
         return
@@ -1277,9 +1391,13 @@ async def refund_complaint(call: CallbackQuery):
         (generation["charge_id"],),
     ).fetchone()
 
-    if not payment or payment["refunded"] or generation["refunded"]:
+    if (
+        not payment
+        or payment["refunded"]
+        or generation["refunded"]
+    ):
         await call.answer(
-            "Платёж уже возвращён или не найден.",
+            "Этот платёж уже возвращён или не найден.",
             show_alert=True,
         )
         return
@@ -1291,7 +1409,11 @@ async def refund_complaint(call: CallbackQuery):
         )
 
         db.execute(
-            "UPDATE complaints SET status='refunded' WHERE id=?",
+            """
+            UPDATE complaints
+            SET status='refunded'
+            WHERE id=?
+            """,
             (complaint_id,),
         )
 
@@ -1311,34 +1433,95 @@ async def refund_complaint(call: CallbackQuery):
             f"⭐ Возвращено {generation['stars_paid']} Telegram Stars.",
         )
 
-        await call.message.edit_reply_markup(reply_markup=None)
-        await call.answer("Stars возвращены.")
+        await call.message.edit_reply_markup(
+            reply_markup=None
+        )
+
+        await call.answer("Stars успешно возвращены.")
 
     except Exception as exc:
         log.exception("Stars refund failed")
 
         await call.answer(
-            f"Telegram не выполнил возврат: {str(exc)[:150]}",
+            f"Возврат не выполнен: {str(exc)[:150]}",
             show_alert=True,
         )
 
 
 # =========================================================
-# START BOT
+# RENDER HEALTH SERVER + BOT
 # =========================================================
+
+async def health(request):
+    return web.json_response({
+        "ok": True,
+        "service": "MarketPhoto AI",
+    })
+
 
 async def main():
     init_db()
 
+    # Render Web Service requires a listening HTTP port.
+    app = web.Application()
+    app.router.add_get("/", health)
+    app.router.add_get("/health", health)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    site = web.TCPSite(
+        runner,
+        host="0.0.0.0",
+        port=PORT,
+    )
+
+    await site.start()
+
     log.info(
-        "Starting MarketPhoto AI. Model=%s",
-        MODEL,
+        "HEALTH SERVER STARTED on port %s",
+        PORT,
     )
 
     try:
+        await bot.set_my_commands([
+            BotCommand(
+                command="start",
+                description="Открыть меню",
+            ),
+            BotCommand(
+                command="help",
+                description="Помощь",
+            ),
+            BotCommand(
+                command="limit",
+                description="Мой лимит",
+            ),
+            BotCommand(
+                command="cancel",
+                description="Отменить действие",
+            ),
+            BotCommand(
+                command="admin",
+                description="Статистика администратора",
+            ),
+        ])
+
+        me = await bot.get_me()
+
+        log.info(
+            "TELEGRAM CONNECTED: @%s, id=%s",
+            me.username,
+            me.id,
+        )
+
+        log.info("STARTING TELEGRAM POLLING")
+
         await dp.start_polling(bot)
 
     finally:
+        await runner.cleanup()
+
         if http_session and not http_session.closed:
             await http_session.close()
 
@@ -1348,5 +1531,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
