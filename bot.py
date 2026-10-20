@@ -1,6 +1,6 @@
-# BUILD_ID: marketphoto-rick-morty-seed-retry-new-animation-2026-10-20-v6
+# BUILD_ID: marketphoto-stable-polling-safe-moderation-2026-10-20-v7
 from __future__ import annotations
- 
+
 import asyncio
 import base64
 from contextlib import contextmanager
@@ -8,7 +8,6 @@ import html
 import io
 import json
 import logging
-import math
 import os
 import secrets
 import sqlite3
@@ -37,7 +36,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 
-BUILD_ID = "marketphoto-rick-morty-seed-retry-new-animation-2026-10-20-v6"
+BUILD_ID = "marketphoto-stable-polling-safe-moderation-2026-10-20-v7"
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -156,6 +155,7 @@ dp = Dispatcher()
 http_client: httpx.AsyncClient | None = None
 user_flows: dict[int, dict[str, Any]] = {}
 in_progress: set[int] = set()
+polling_active = False
 
 
 class UserFacingError(Exception):
@@ -255,10 +255,12 @@ def init_db() -> None:
             r[1]
             for r in db.execute("PRAGMA table_info(daily_usage)").fetchall()
         }
+
         if "free_used" not in columns:
             db.execute(
                 "ALTER TABLE daily_usage ADD COLUMN free_used INTEGER NOT NULL DEFAULT 0"
             )
+
         if "vip_used" not in columns:
             db.execute(
                 "ALTER TABLE daily_usage ADD COLUMN vip_used INTEGER NOT NULL DEFAULT 0"
@@ -271,8 +273,10 @@ def init_db() -> None:
 
         if "vip_previous" not in payment_columns:
             db.execute("ALTER TABLE payments ADD COLUMN vip_previous TEXT")
+
         if "vip_granted_until" not in payment_columns:
             db.execute("ALTER TABLE payments ADD COLUMN vip_granted_until TEXT")
+
         if "refunded" not in payment_columns:
             db.execute(
                 "ALTER TABLE payments ADD COLUMN refunded INTEGER NOT NULL DEFAULT 0"
@@ -307,11 +311,15 @@ def get_user(user_id: int) -> sqlite3.Row | None:
 def vip_active(until: str | None) -> bool:
     if not until:
         return False
+
     try:
         expires = datetime.fromisoformat(until)
+
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=timezone.utc)
+
         return expires > now_utc()
+
     except (TypeError, ValueError):
         return False
 
@@ -548,13 +556,11 @@ def extract_image_response(response: httpx.Response) -> bytes:
 
         if 3030 in codes:
             raise UserFacingError(
-                "Cloudflare отклонил два варианта изображения "
-                "фильтром безопасности (код 3030). "
-                "Бот автоматически попробовал другой вариант. "
-                "Это внешний фильтр Cloudflare, поэтому конкретный "
-                "результат нельзя гарантировать. Попробуй описать сцену "
-                "как обычный дружелюбный мультяшный портрет без оружия, "
-                "травм и пугающих деталей. Лимит за неудачную генерацию возвращён."
+                "Cloudflare отклонил запрос проверкой безопасности (код 3030). "
+                "Этот фильтр работает на стороне Cloudflare и не отключается настройкой бота. "
+                "Попробуй безопасное, нейтральное описание сцены без жестокости "
+                "и других деталей, которые могут быть неверно истолкованы. "
+                "Лимит за неудачную генерацию возвращён."
             )
 
         if 3036 in codes:
@@ -567,7 +573,7 @@ def extract_image_response(response: httpx.Response) -> bytes:
         if 3040 in codes:
             raise UserFacingError(
                 "Cloudflare временно перегружен. Подожди немного и повтори попытку. "
-                "Лимит за неудачную попытку возвращён."
+                "Лимит за неудачную генерацию возвращён."
             )
 
         if response.status_code in (401, 403):
@@ -696,12 +702,9 @@ async def generate_image(
 
     response: httpx.Response | None = None
     max_attempts = 3
-    moderation_retry_count = 0
 
     try:
         for attempt in range(max_attempts):
-            # Use a different seed for each attempt to obtain a different sample.
-            # This does not disable or bypass Cloudflare's safety filter.
             attempt_parts = list(base_parts)
             attempt_parts.append(
                 (
@@ -729,19 +732,8 @@ async def generate_image(
                 else set()
             )
 
-            # Retry moderation failures once with a new seed.
-            if 3030 in codes and moderation_retry_count < 1:
-                moderation_retry_count += 1
-
-                log.warning(
-                    "Cloudflare output moderation code 3030; "
-                    "retrying once with a new seed (%s/%s)",
-                    moderation_retry_count,
-                    1,
-                )
-
-                await asyncio.sleep(0.8)
-                continue
+            if 3030 in codes:
+                break
 
             retryable = response.status_code in (
                 408,
@@ -966,7 +958,7 @@ def generation_progress_text(percent: int, frame_index: int) -> str:
 
 
 async def animate_generation(status_message: Message) -> None:
-    """Animate status without ever interrupting the image generation."""
+    """Animate status without interrupting image generation."""
     frame_index = 0
 
     while True:
@@ -2161,6 +2153,7 @@ async def health_server() -> asyncio.AbstractServer:
                 "service": "marketphoto-ai",
                 "build": BUILD_ID,
                 "model": CF_MODEL,
+                "telegram_polling": polling_active,
             }
 
             if path not in ("/", "/health"):
@@ -2206,7 +2199,7 @@ async def health_server() -> asyncio.AbstractServer:
 
 
 async def main() -> None:
-    global bot, http_client
+    global bot, http_client, polling_active
 
     log.info("BUILD_ID=%s", BUILD_ID)
     log.info("RUNNING_FILE=%s", Path(__file__).resolve())
@@ -2219,11 +2212,6 @@ async def main() -> None:
         log.warning(
             "Cloudflare variables missing; bot starts, "
             "but generation will fail until configured"
-        )
-
-    if not ADMIN_IDS:
-        log.warning(
-            "ADMIN_IDS is empty; admin notifications and admin commands are disabled"
         )
 
     init_db()
@@ -2245,42 +2233,64 @@ async def main() -> None:
 
     try:
         server = await health_server()
+        log.info("Health server listening on port %s", PORT)
+        log.info("Starting MarketPhoto AI. Model=%s", CF_MODEL)
 
-        log.info(
-            "Health server listening on port %s",
-            PORT,
-        )
+        retry_delay = 2.0
 
-        log.info(
-            "Starting MarketPhoto AI. Model=%s",
-            CF_MODEL,
-        )
+        while True:
+            try:
+                await bot.delete_webhook(drop_pending_updates=False)
+                polling_active = True
 
-        await bot.delete_webhook(drop_pending_updates=False)
+                log.info("Telegram polling starting")
 
-        try:
-            await dp.start_polling(
-                bot,
-                allowed_updates=dp.resolve_used_update_types(),
-            )
+                await dp.start_polling(
+                    bot,
+                    allowed_updates=dp.resolve_used_update_types(),
+                )
 
-        except TelegramConflictError:
-            log.critical(
-                "TelegramConflictError: another process is polling this same bot token. "
-                "Stop every other local/Render instance and leave exactly one poller running."
-            )
-            raise
+                polling_active = False
+                log.info("Telegram polling stopped normally; shutting down cleanly")
+                break
+
+            except TelegramConflictError:
+                polling_active = False
+                log.critical(
+                    "TelegramConflictError: another process is polling this same bot token. "
+                    "Stop every other local/Render instance and leave exactly one poller running."
+                )
+                raise
+
+            except (KeyboardInterrupt, SystemExit):
+                polling_active = False
+                raise
+
+            except Exception:
+                polling_active = False
+
+                log.exception(
+                    "Telegram polling crashed. Restarting in %.1f seconds",
+                    retry_delay,
+                )
+
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2.0, 60.0)
 
     finally:
+        polling_active = False
+
         if server is not None:
             server.close()
             await server.wait_closed()
 
         if http_client is not None:
             await http_client.aclose()
+            http_client = None
 
         if bot is not None:
             await bot.session.close()
+            bot = None
 
 
 if __name__ == "__main__":
