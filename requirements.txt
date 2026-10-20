@@ -1,6 +1,6 @@
 
 
+
 aiogram>=3.7,<4.0
 aiohttp>=3.9
-google-genai
-Pillow
+Pillow>=10.0
