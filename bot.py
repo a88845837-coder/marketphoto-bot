@@ -1,13 +1,19 @@
 
 import os
 import asyncio
+import base64
+import json
 import logging
+import random
 import sqlite3
-from io import BytesIO
 from datetime import datetime
+from io import BytesIO
 from zoneinfo import ZoneInfo
 
+import aiohttp
 from aiohttp import web
+from PIL import Image, UnidentifiedImageError
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
@@ -22,28 +28,40 @@ from aiogram.types import (
     InlineKeyboardButton,
     LabeledPrice,
 )
-from google import genai
-from PIL import Image
 
 
 # ============================================================
-# SETTINGS
+# CONFIGURATION
 # Render -> Environment
 # ============================================================
 
 BOT_TOKEN = (
-    os.getenv("TELEGRAM_TOKEN")
-    or os.getenv("BOT_TOKEN")
+    os.getenv("BOT_TOKEN")
+    or os.getenv("TELEGRAM_TOKEN")
     or ""
 ).strip()
 
-GOOGLE_API_KEY = (
-    os.getenv("GOOGLE_API_KEY")
-    or os.getenv("GEMINI_API_KEY")
+CF_ACCOUNT_ID = (
+    os.getenv("CLOUDFLARE_ACCOUNT_ID")
+    or os.getenv("CF_ACCOUNT_ID")
     or ""
 ).strip()
 
-ADMIN_ID = int(os.getenv("ADMIN_ID", "5694967765"))
+CF_API_TOKEN = (
+    os.getenv("CLOUDFLARE_API_TOKEN")
+    or os.getenv("CF_API_TOKEN")
+    or ""
+).strip()
+
+CF_MODEL = "@cf/black-forest-labs/flux-2-klein-4b"
+
+CF_URL = (
+    "https://api.cloudflare.com/client/v4/accounts/"
+    + CF_ACCOUNT_ID
+    + "/ai/run/"
+    + CF_MODEL
+)
+
 PORT = int(os.getenv("PORT", "10000"))
 DB_PATH = os.getenv("DB_PATH", "marketphoto.db")
 TIMEZONE = os.getenv("APP_TIMEZONE", "Europe/Kyiv")
@@ -52,12 +70,6 @@ FREE_PER_DAY = 5
 PACK_CREDITS = 10
 PACK_PRICE_STARS = 25
 
-# Модель генерации та редагування зображень
-IMAGE_MODEL = os.getenv(
-    "GOOGLE_IMAGE_MODEL",
-    "gemini-nano-banana-2.1",
-)
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
@@ -65,18 +77,17 @@ logging.basicConfig(
 logger = logging.getLogger("marketphoto")
 
 if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN не заданий у Render Environment")
+
+if not CF_ACCOUNT_ID:
     raise RuntimeError(
-        "BOT_TOKEN або TELEGRAM_TOKEN не заданий у Render Environment"
+        "CLOUDFLARE_ACCOUNT_ID не заданий у Render Environment"
     )
 
-if not GOOGLE_API_KEY:
+if not CF_API_TOKEN:
     raise RuntimeError(
-        "GOOGLE_API_KEY не заданий у Render Environment"
+        "CLOUDFLARE_API_TOKEN не заданий у Render Environment"
     )
-
-# Звичайний Gemini Developer API за API-ключем Google AI Studio.
-# Тут навмисно не використовується Vertex AI.
-client = genai.Client(api_key=GOOGLE_API_KEY)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -111,9 +122,7 @@ def init_db():
         con.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 charge_id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                amount INTEGER NOT NULL,
-                currency TEXT NOT NULL
+                user_id INTEGER NOT NULL
             )
         """)
 
@@ -131,32 +140,23 @@ def get_user(user_id):
             (user_id, today),
         )
 
-        row = con.execute(
+        saved_day, used, credits = con.execute(
             """
             SELECT day, used, credits
             FROM users
-            WHERE user_id = ?
+            WHERE user_id=?
             """,
             (user_id,),
         ).fetchone()
 
-        saved_day, used, credits = row
-
         if saved_day != today:
             used = 0
             con.execute(
-                """
-                UPDATE users
-                SET day = ?, used = 0
-                WHERE user_id = ?
-                """,
+                "UPDATE users SET day=?, used=0 WHERE user_id=?",
                 (today, user_id),
             )
 
-        return {
-            "used": used,
-            "credits": credits,
-        }
+        return {"used": used, "credits": credits}
 
 
 def can_generate(user_id):
@@ -168,10 +168,13 @@ def can_generate(user_id):
 
 
 def charge_generation(user_id):
-    """Списує одну генерацію після успішного створення зображення."""
+    """Списує ліміт лише після успішної генерації."""
+
     today = today_string()
 
     with db_connect() as con:
+        con.execute("BEGIN IMMEDIATE")
+
         con.execute(
             """
             INSERT OR IGNORE INTO users
@@ -185,7 +188,7 @@ def charge_generation(user_id):
             """
             SELECT day, used, credits
             FROM users
-            WHERE user_id = ?
+            WHERE user_id=?
             """,
             (user_id,),
         ).fetchone()
@@ -203,8 +206,8 @@ def charge_generation(user_id):
         con.execute(
             """
             UPDATE users
-            SET day = ?, used = ?, credits = ?
-            WHERE user_id = ?
+            SET day=?, used=?, credits=?
+            WHERE user_id=?
             """,
             (today, used, credits, user_id),
         )
@@ -212,18 +215,20 @@ def charge_generation(user_id):
     return True
 
 
-def record_payment_once(charge_id, user_id, amount, currency):
-    """Не зараховує один і той самий платіж двічі."""
+def record_payment_once(charge_id, user_id):
+    """Зараховує одну покупку лише один раз."""
+
     today = today_string()
 
     with db_connect() as con:
+        con.execute("BEGIN IMMEDIATE")
+
         cursor = con.execute(
             """
-            INSERT OR IGNORE INTO payments
-            (charge_id, user_id, amount, currency)
-            VALUES (?, ?, ?, ?)
+            INSERT OR IGNORE INTO payments (charge_id, user_id)
+            VALUES (?, ?)
             """,
-            (charge_id, user_id, amount, currency),
+            (charge_id, user_id),
         )
 
         if cursor.rowcount == 0:
@@ -239,11 +244,7 @@ def record_payment_once(charge_id, user_id, amount, currency):
         )
 
         con.execute(
-            """
-            UPDATE users
-            SET credits = credits + ?
-            WHERE user_id = ?
-            """,
+            "UPDATE users SET credits=credits+? WHERE user_id=?",
             (PACK_CREDITS, user_id),
         )
 
@@ -255,45 +256,41 @@ def record_payment_once(charge_id, user_id, amount, currency):
 # ============================================================
 
 def main_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🎨 Створити фото",
-                    callback_data="generate",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🪄 Редагувати фото",
-                    callback_data="edit",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="👤 Профіль",
-                    callback_data="profile",
-                ),
-                InlineKeyboardButton(
-                    text="⭐ Купити генерації",
-                    callback_data="shop",
-                ),
-            ],
-        ]
-    )
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🎨 Створити фото",
+                callback_data="generate",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🪄 Редагувати фото",
+                callback_data="edit",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👤 Профіль",
+                callback_data="profile",
+            ),
+            InlineKeyboardButton(
+                text="⭐ Купити генерації",
+                callback_data="shop",
+            ),
+        ],
+    ])
 
 
 def back_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="⬅️ Головне меню",
-                    callback_data="home",
-                )
-            ]
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="⬅️ Головне меню",
+                callback_data="home",
+            )
         ]
-    )
+    ])
 
 
 # ============================================================
@@ -307,80 +304,279 @@ class PhotoStates(StatesGroup):
 
 
 # ============================================================
-# GOOGLE IMAGE GENERATION
-# Uses Gemini Developer API: models.generate_content()
+# CLOUDFLARE WORKERS AI
+# FLUX.2 Klein 4B
 # ============================================================
 
-def extract_image(response):
+def get_error_message(raw):
+    """Повертає зрозумілий текст помилки API."""
+
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except Exception:
+        return raw[:1500].decode("utf-8", errors="replace")
+
+    errors = data.get("errors", [])
+    if errors:
+        messages = []
+
+        for item in errors:
+            if isinstance(item, dict):
+                messages.append(
+                    str(item.get("message", item))
+                )
+            else:
+                messages.append(str(item))
+
+        return "; ".join(messages)[:1500]
+
+    return str(data.get("message", data))[:1500]
+
+
+def decode_image_response(raw, content_type):
     """
-    Шукає зображення у відповіді Gemini та повертає PNG-байти.
-    Якщо API повернув тільки текст, записує його у лог.
+    Cloudflare може віддати зображення як бінарні дані
+    або як Base64 у JSON result.image.
     """
-    for part in response.parts or []:
-        if getattr(part, "inline_data", None):
-            image = part.as_image()
+
+    if not raw:
+        raise RuntimeError("Cloudflare повернув порожню відповідь.")
+
+    # Відповідь уже є готовим файлом зображення.
+    if (
+        content_type.startswith("image/")
+        or raw.startswith(b"\x89PNG\r\n\x1a\n")
+        or raw.startswith(b"\xff\xd8\xff")
+        or raw.startswith(b"RIFF")
+    ):
+        return raw
+
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise RuntimeError(
+            "Не вдалося прочитати відповідь Cloudflare: "
+            + raw[:500].decode("utf-8", errors="replace")
+        ) from exc
+
+    if data.get("success") is False:
+        raise RuntimeError(
+            "Cloudflare API: " + get_error_message(raw)
+        )
+
+    result = data.get("result", data)
+
+    if isinstance(result, dict):
+        image_data = (
+            result.get("image")
+            or result.get("data")
+        )
+    elif isinstance(result, str):
+        image_data = result
+    else:
+        image_data = None
+
+    if not image_data:
+        raise RuntimeError(
+            "У відповіді Cloudflare немає поля image. "
+            "Перевір Render Logs."
+        )
+
+    if image_data.startswith("data:image"):
+        image_data = image_data.split(",", 1)[1]
+
+    try:
+        image_bytes = base64.b64decode(image_data)
+    except Exception as exc:
+        raise RuntimeError(
+            "Cloudflare повернув зображення в невідомому форматі."
+        ) from exc
+
+    if not image_bytes:
+        raise RuntimeError("Отримано порожнє зображення.")
+
+    return image_bytes
+
+
+async def cloudflare_image(
+    prompt,
+    reference_image=None,
+    width=1024,
+    height=1024,
+):
+    """
+    Створює фото або редагує референс через REST API.
+    Для FLUX.2 Klein 4B потрібен multipart/form-data.
+    """
+
+    form = aiohttp.FormData()
+
+    form.add_field("prompt", prompt)
+    form.add_field("width", str(width))
+    form.add_field("height", str(height))
+    form.add_field("guidance", "4")
+    form.add_field(
+        "seed",
+        str(random.randint(1, 2**31 - 1)),
+    )
+
+    if reference_image:
+        # За документацією Cloudflare референсні зображення
+        # для цієї моделі мають бути меншими за 512x512.
+        form.add_field(
+            "input_image_0",
+            reference_image,
+            filename="reference.png",
+            content_type="image/png",
+        )
+
+    headers = {
+        "Authorization": f"Bearer {CF_API_TOKEN}",
+    }
+
+    timeout = aiohttp.ClientTimeout(
+        total=240,
+        connect=20,
+        sock_read=220,
+    )
+
+    async with aiohttp.ClientSession(
+        timeout=timeout
+    ) as session:
+        async with session.post(
+            CF_URL,
+            headers=headers,
+            data=form,
+        ) as response:
+            raw = await response.read()
+            content_type = response.headers.get(
+                "Content-Type", ""
+            ).lower()
+
+            if response.status >= 400:
+                details = get_error_message(raw)
+
+                logger.error(
+                    "Cloudflare returned HTTP %s: %s",
+                    response.status,
+                    details,
+                )
+
+                if response.status == 401:
+                    raise RuntimeError(
+                        "Cloudflare API Token неправильний або недійсний."
+                    )
+
+                if response.status == 403:
+                    raise RuntimeError(
+                        "Cloudflare заборонив запит. Перевір дозволи токена "
+                        "Workers AI Read та Workers AI Edit."
+                    )
+
+                if response.status == 429:
+                    raise RuntimeError(
+                        "Досягнуто ліміт Cloudflare Workers AI. "
+                        "Спробуй знову після відновлення квоти."
+                    )
+
+                raise RuntimeError(
+                    f"Cloudflare HTTP {response.status}: {details}"
+                )
+
+            return decode_image_response(
+                raw,
+                content_type,
+            )
+
+
+# ============================================================
+# PROMPT ENHANCEMENT
+# ============================================================
+
+def build_generation_prompt(user_prompt):
+    return (
+        "Create a high-quality photorealistic photograph. "
+        "Follow the user's description closely. Natural skin texture, "
+        "realistic human anatomy, believable hands and eyes, natural "
+        "lighting and shadows, detailed materials, physically realistic "
+        "environment, carefully composed professional photography, "
+        "balanced colors, sharp focus. Avoid cartoon style, plastic skin, "
+        "unwanted text, watermarks and unnecessary objects. "
+        "User description: "
+        + user_prompt
+    )
+
+
+def build_edit_prompt(instruction):
+    return (
+        "Edit the provided reference photograph according to this instruction. "
+        "Preserve the identity, face, age, and main features of the person "
+        "as much as possible. Change only what the user requests. Make the "
+        "result photorealistic, with natural skin texture, realistic lighting "
+        "and shadows, balanced colors, and consistent perspective. "
+        "Editing instruction: "
+        + instruction
+    )
+
+
+def prepare_reference(raw_bytes):
+    """
+    Готує фото меншого за 512x512 розміру
+    та підбирає розмір вихідного зображення зі збереженням пропорцій.
+    """
+
+    try:
+        with Image.open(BytesIO(raw_bytes)) as original:
+            original = original.convert("RGB")
+            orig_width, orig_height = original.size
+            if orig_width <= 0 or orig_height <= 0:
+                raise ValueError("Некоректний розмір фото.")
+
+            # Цільовий розмір до 1024 пікселів по довшій стороні.
+            scale = min(
+                1024 / orig_width,
+                1024 / orig_height,
+            )
+
+            target_width = max(
+                256,
+                min(
+                    1024,
+                    int(orig_width * scale / 64) * 64,
+                ),
+            )
+            target_height = max(
+                256,
+                min(
+                    1024,
+                    int(orig_height * scale / 64) * 64,
+                ),
+            )
+
+            # Для референсу обмежуємо обидві сторони до 480.
+            reference = original.copy()
+            reference.thumbnail(
+                (480, 480),
+                Image.Resampling.LANCZOS,
+            )
 
             output = BytesIO()
-            image.save(output, format="PNG")
+            reference.save(output, format="PNG")
 
-            return output.getvalue()
+            return (
+                output.getvalue(),
+                target_width,
+                target_height,
+            )
 
-    response_text = getattr(response, "text", None)
-    logger.error(
-        "Gemini response contains no image. Response text: %s",
-        response_text,
-    )
-
-    raise RuntimeError(
-        "Gemini API не повернув зображення. Перевір Render Logs."
-    )
-
-
-def generate_image_sync(prompt):
-    """Створює нове реалістичне фото з тексту."""
-    enhanced_prompt = (
-        "Create a highly photorealistic professional photograph. "
-        "Natural skin texture, realistic human anatomy, detailed eyes, "
-        "natural hands, realistic lighting and shadows, natural colors, "
-        "realistic materials, professional camera photography, sharp focus. "
-        "Avoid cartoon style, illustration, artificial plastic skin, "
-        "excessive saturation and distorted details. Scene: "
-        + prompt
-    )
-
-    response = client.models.generate_content(
-        model=IMAGE_MODEL,
-        contents=[enhanced_prompt],
-    )
-
-    return extract_image(response)
-
-
-def edit_image_sync(photo_bytes, instruction):
-    """Редагує фото, надіслане користувачем."""
-    source = Image.open(
-        BytesIO(photo_bytes)
-    ).convert("RGB")
-
-    prompt = (
-        "Edit the provided photograph according to this instruction: "
-        + instruction
-        + ". Keep the result photorealistic, with realistic textures, "
-        "natural colors, lighting and shadows. Preserve the person's "
-        "identity and facial features as much as possible. "
-        "Do not change unrelated details."
-    )
-
-    response = client.models.generate_content(
-        model=IMAGE_MODEL,
-        contents=[prompt, source],
-    )
-
-    return extract_image(response)
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ValueError(
+            "Не вдалося прочитати завантажене фото."
+        ) from exc
 
 
 # ============================================================
-# START AND GENERAL COMMANDS
+# START AND COMMANDS
 # ============================================================
 
 @dp.message(CommandStart())
@@ -394,25 +590,24 @@ async def start_handler(
     remaining = max(0, FREE_PER_DAY - user["used"])
 
     await message.answer(
-        "📸 <b>MarketPhoto AI</b>\n\n"
-        "Створюй реалістичні фото з тексту або редагуй власні.\n\n"
-        f"🎁 Безкоштовно: {FREE_PER_DAY} генерацій на день.\n"
+        "<b>📸 MarketPhoto AI</b>\n\n"
+        "🎨 Генеруй реалістичні фото з тексту.\n"
+        "🪄 Редагуй завантажені фотографії.\n\n"
+        f"🎁 Безкоштовно: до {FREE_PER_DAY} генерацій на день.\n"
         f"Залишилося сьогодні: {remaining}\n\n"
-        "Обери потрібну дію в меню.",
-        reply_markup=main_keyboard(),
+        "Вибери дію в меню:",
         parse_mode="HTML",
+        reply_markup=main_keyboard(),
     )
 
 
 @dp.message(Command("help"))
 async def help_handler(message: Message):
     await message.answer(
-        "🎨 <b>Створення фото</b>\n"
-        "Натисни «Створити фото» та напиши опис.\n\n"
-        "🪄 <b>Редагування фото</b>\n"
-        "Натисни «Редагувати фото», надішли фотографію "
-        "та напиши, що потрібно змінити.\n\n"
-        "Для скасування поточної дії введи /cancel.",
+        "🎨 <b>Створити фото</b> — натисни кнопку та напиши опис.\n\n"
+        "🪄 <b>Редагувати фото</b> — натисни кнопку, надішли фото, "
+        "потім опиши зміни.\n\n"
+        "Для скасування введи /cancel.",
         parse_mode="HTML",
         reply_markup=main_keyboard(),
     )
@@ -424,6 +619,7 @@ async def cancel_handler(
     state: FSMContext,
 ):
     await state.clear()
+
     await message.answer(
         "Дію скасовано.",
         reply_markup=main_keyboard(),
@@ -439,22 +635,22 @@ async def id_handler(message: Message):
 
 @dp.message(Command("admin"))
 async def admin_handler(message: Message):
-    if message.from_user.id != ADMIN_ID:
+    if message.from_user.id != int(
+        os.getenv("ADMIN_ID", "5694967765")
+    ):
         await message.answer("Немає доступу.")
         return
 
     await message.answer(
-        "🛠 <b>MarketPhoto AI</b>\n\n"
-        "Бот отримав команду адміністратора.\n"
-        f"Модель: {IMAGE_MODEL}\n"
-        f"Google API Key задано: {bool(GOOGLE_API_KEY)}\n"
-        f"Telegram Token задано: {bool(BOT_TOKEN)}",
-        parse_mode="HTML",
+        "🛠 MarketPhoto AI\n\n"
+        f"Модель: {CF_MODEL}\n"
+        f"Cloudflare Account ID задано: {bool(CF_ACCOUNT_ID)}\n"
+        f"API Token задано: {bool(CF_API_TOKEN)}"
     )
 
 
 # ============================================================
-# MAIN MENU CALLBACKS
+# MENU CALLBACKS
 # ============================================================
 
 @dp.callback_query(F.data == "home")
@@ -463,10 +659,12 @@ async def home_handler(
     state: FSMContext,
 ):
     await state.clear()
+
     await callback.message.answer(
-        "Головне меню MarketPhoto AI:",
+        "Головне меню:",
         reply_markup=main_keyboard(),
     )
+
     await callback.answer()
 
 
@@ -487,7 +685,7 @@ async def profile_handler(callback: CallbackQuery):
 
 
 # ============================================================
-# GENERATION WORKFLOW
+# GENERATION FROM TEXT
 # ============================================================
 
 @dp.callback_query(F.data == "generate")
@@ -498,45 +696,41 @@ async def begin_generation(
     await state.set_state(PhotoStates.waiting_prompt)
 
     await callback.message.answer(
-        "🎨 Напиши, яке фото створити.\n\n"
-        "Приклад: реалістичний портрет чоловіка на нічній вулиці, "
-        "природне освітлення, професійна фотографія.\n\n"
-        "Для скасування введи /cancel."
+        "🎨 Напиши опис фото.\n\n"
+        "Наприклад: реалістичний портрет молодого чоловіка "
+        "на нічній вулиці, природне освітлення, професійна фотографія.\n\n"
+        "Скасування: /cancel"
     )
 
     await callback.answer()
 
 
-async def create_and_send_image(
-    message: Message,
-    prompt: str,
-):
-    if len(prompt) < 3:
-        await message.answer("Напиши детальніший опис фото.")
-        return
+async def create_photo(message: Message, prompt: str):
+    prompt = prompt.strip()
 
-    if len(prompt) > 1500:
+    if len(prompt) < 3 or len(prompt) > 1500:
         await message.answer(
-            "Опис занадто довгий. Максимум 1500 символів."
+            "Опис має містити від 3 до 1500 символів."
         )
         return
 
     if not can_generate(message.from_user.id):
         await message.answer(
-            "🎁 Безкоштовний ліміт закінчився. "
-            "Можна придбати додаткові генерації.",
+            "🎁 Ліміт генерацій закінчився. "
+            "Можеш спробувати завтра або купити додаткові генерації.",
             reply_markup=main_keyboard(),
         )
         return
 
     status = await message.answer(
-        "🎨 Створюю реалістичне фото..."
+        "🎨 Створюю реалістичне фото через Cloudflare..."
     )
 
     try:
-        image_bytes = await asyncio.to_thread(
-            generate_image_sync,
-            prompt,
+        image_bytes = await cloudflare_image(
+            build_generation_prompt(prompt),
+            width=1024,
+            height=1024,
         )
 
         if not charge_generation(message.from_user.id):
@@ -553,14 +747,12 @@ async def create_and_send_image(
             caption="✨ Готово! Ось твоє фото.",
         )
 
-    except Exception:
-        logger.exception("Image generation failed")
+    except Exception as exc:
+        logger.exception("Cloudflare image generation failed")
 
         await message.answer(
             "Не вдалося створити фото.\n\n"
-            "Перевір Render → Logs. Можливі причини: "
-            "недійсний API-ключ, недоступна модель, "
-            "обмеження квоти або помилка Google API."
+            f"Причина: {str(exc)[:700]}"
         )
 
     finally:
@@ -576,43 +768,42 @@ async def generation_prompt_handler(
     state: FSMContext,
 ):
     prompt = message.text.strip()
-
     await state.clear()
-    await create_and_send_image(message, prompt)
+
+    await create_photo(message, prompt)
 
 
 # ============================================================
-# PHOTO EDITING WORKFLOW
+# EDIT UPLOADED PHOTO
 # ============================================================
 
 @dp.callback_query(F.data == "edit")
-async def begin_editing(
+async def begin_edit(
     callback: CallbackQuery,
     state: FSMContext,
 ):
     await state.set_state(PhotoStates.waiting_photo)
 
     await callback.message.answer(
-        "🪄 Надішли фотографію як звичайне фото в Telegram.\n\n"
-        "Потім напиши, що змінити.\n\n"
-        "Наприклад: «Заміни фон на сучасну фотостудію, "
-        "а обличчя та одяг залиш без змін».\n\n"
-        "Для скасування введи /cancel."
+        "🪄 Надішли фотографію як звичайне фото.\n\n"
+        "Після цього напиши, що саме змінити.\n\n"
+        "Наприклад: «Заміни фон на пляж, обличчя залиш без змін».\n\n"
+        "Скасування: /cancel"
     )
 
     await callback.answer()
 
 
 @dp.message(PhotoStates.waiting_photo, F.photo)
-async def receive_photo(
+async def receive_edit_photo(
     message: Message,
     state: FSMContext,
 ):
     if not can_generate(message.from_user.id):
         await state.clear()
+
         await message.answer(
-            "Безкоштовний ліміт закінчився. "
-            "Придбай додаткові генерації.",
+            "🎁 Ліміт генерацій закінчився.",
             reply_markup=main_keyboard(),
         )
         return
@@ -629,17 +820,13 @@ async def receive_photo(
             destination=downloaded,
         )
 
-        photo_bytes = downloaded.getvalue()
+        raw_photo = downloaded.getvalue()
 
-        if not photo_bytes:
-            raise ValueError("Отримано порожній файл.")
-
-        # Перевіряємо, що Telegram-файл справді є зображенням.
-        with Image.open(BytesIO(photo_bytes)) as image:
-            image.verify()
+        # Переконуємось, що зображення читається.
+        prepare_reference(raw_photo)
 
         await state.update_data(
-            photo_bytes=photo_bytes
+            photo_bytes=raw_photo
         )
 
         await state.set_state(
@@ -647,22 +834,24 @@ async def receive_photo(
         )
 
         await message.answer(
-            "📷 Фото отримано!\n\n"
+            "📷 Фото отримано!\n"
             "Тепер напиши, що потрібно змінити."
         )
 
     except Exception:
-        logger.exception("Photo download or validation failed")
+        logger.exception("Could not download/validate uploaded photo")
+
         await state.clear()
+
         await message.answer(
-            "Не вдалося відкрити фото. Надішли інше зображення."
+            "Не вдалося відкрити фото. Спробуй надіслати його ще раз."
         )
 
 
 @dp.message(PhotoStates.waiting_photo, F.text)
-async def photo_required(message: Message):
+async def wait_for_photo(message: Message):
     await message.answer(
-        "Спочатку надішли фотографію як звичайне фото."
+        "Спочатку надішли фотографію, а потім інструкцію."
     )
 
 
@@ -673,66 +862,66 @@ async def edit_instruction_handler(
 ):
     instruction = message.text.strip()
 
-    if len(instruction) < 3:
+    if len(instruction) < 3 or len(instruction) > 1500:
         await message.answer(
-            "Опиши детальніше, що потрібно змінити."
-        )
-        return
-
-    if len(instruction) > 1500:
-        await message.answer(
-            "Інструкція занадто довга. Максимум 1500 символів."
+            "Інструкція має містити від 3 до 1500 символів."
         )
         return
 
     if not can_generate(message.from_user.id):
         await state.clear()
+
         await message.answer(
-            "Ліміт генерацій закінчився. Придбай додаткові генерації.",
+            "Безкоштовний ліміт закінчився.",
             reply_markup=main_keyboard(),
         )
         return
 
     data = await state.get_data()
-    photo_bytes = data.get("photo_bytes")
+    raw_photo = data.get("photo_bytes")
 
-    if not photo_bytes:
+    if not raw_photo:
         await state.clear()
+
         await message.answer(
             "Фото не знайдено. Натисни «Редагувати фото» і надішли його знову."
         )
         return
 
     status = await message.answer(
-        "🪄 Редагую фото..."
+        "🪄 Редагую фото через Cloudflare..."
     )
 
     try:
-        image_bytes = await asyncio.to_thread(
-            edit_image_sync,
-            photo_bytes,
-            instruction,
+        reference, width, height = prepare_reference(raw_photo)
+
+        image_bytes = await cloudflare_image(
+            build_edit_prompt(instruction),
+            reference_image=reference,
+            width=width,
+            height=height,
         )
 
         if not charge_generation(message.from_user.id):
             await message.answer(
-                "Ліміт генерацій закінчився. Спробуй пізніше."
+                "Ліміт генерацій закінчився."
             )
             return
 
         await message.answer_photo(
             photo=BufferedInputFile(
                 image_bytes,
-                filename="marketphoto_edited.png",
+                filename="marketphoto_edit.png",
             ),
             caption="✨ Готово! Фото відредаговано.",
         )
 
-    except Exception:
-        logger.exception("Photo editing failed")
+    except Exception as exc:
+        logger.exception("Cloudflare image editing failed")
+
         await message.answer(
-            "Не вдалося відредагувати фото.\n"
-            "Перевір Render Logs: Google API має повернути зображення."
+            "Не вдалося відредагувати фото.\n\n"
+            f"Причина: {str(exc)[:700]}"
         )
 
     finally:
@@ -745,23 +934,22 @@ async def edit_instruction_handler(
 
 
 # ============================================================
-# DIRECT TEXT PROMPTS
-# Users can also generate by sending text without pressing a button.
+# DIRECT TEXT GENERATION
 # ============================================================
 
 @dp.message(F.text & ~F.text.startswith("/"))
-async def direct_prompt_handler(message: Message):
-    await create_and_send_image(
+async def direct_text_handler(message: Message):
+    await create_photo(
         message,
         message.text.strip(),
     )
 
 
 @dp.message(F.photo)
-async def photo_outside_edit_flow(message: Message):
+async def photo_without_edit_mode(message: Message):
     await message.answer(
-        "Щоб редагувати це фото, спочатку натисни "
-        "«Редагувати фото» в меню, а потім надішли зображення.",
+        "Щоб редагувати фото, спочатку натисни кнопку "
+        "«Редагувати фото» в меню.",
         reply_markup=main_keyboard(),
     )
 
@@ -772,32 +960,27 @@ async def photo_outside_edit_flow(message: Message):
 
 @dp.callback_query(F.data == "shop")
 async def shop_handler(callback: CallbackQuery):
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=(
-                        f"⭐ {PACK_PRICE_STARS} Stars — "
-                        f"{PACK_CREDITS} генерацій"
-                    ),
-                    callback_data="buy_pack",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="⬅️ Назад",
-                    callback_data="home",
-                )
-            ],
-        ]
-    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=f"⭐ {PACK_PRICE_STARS} Stars — {PACK_CREDITS} генерацій",
+                callback_data="buy_pack",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="⬅️ Назад",
+                callback_data="home",
+            )
+        ],
+    ])
 
     await callback.message.answer(
         "<b>⭐ Магазин генерацій</b>\n\n"
-        f"{PACK_CREDITS} додаткових генерацій "
-        f"за {PACK_PRICE_STARS} Telegram Stars.",
-        reply_markup=keyboard,
+        f"{PACK_CREDITS} додаткових генерацій за "
+        f"{PACK_PRICE_STARS} Telegram Stars.",
         parse_mode="HTML",
+        reply_markup=keyboard,
     )
 
     await callback.answer()
@@ -808,9 +991,8 @@ async def buy_pack_handler(callback: CallbackQuery):
     await bot.send_invoice(
         chat_id=callback.from_user.id,
         title="MarketPhoto AI — генерації",
-        description=f"{PACK_CREDITS} додаткових генерацій фото",
+        description=f"{PACK_CREDITS} додаткових генерацій",
         payload=f"marketphoto_pack_{callback.from_user.id}",
-        provider_token="",
         currency="XTR",
         prices=[
             LabeledPrice(
@@ -825,12 +1007,10 @@ async def buy_pack_handler(callback: CallbackQuery):
 
 @dp.pre_checkout_query()
 async def pre_checkout_handler(query: PreCheckoutQuery):
-    expected_payload = (
-        f"marketphoto_pack_{query.from_user.id}"
-    )
+    expected = f"marketphoto_pack_{query.from_user.id}"
 
     if (
-        query.invoice_payload != expected_payload
+        query.invoice_payload != expected
         or query.currency != "XTR"
         or query.total_amount != PACK_PRICE_STARS
     ):
@@ -846,42 +1026,31 @@ async def pre_checkout_handler(query: PreCheckoutQuery):
 @dp.message(F.successful_payment)
 async def successful_payment_handler(message: Message):
     payment = message.successful_payment
-
-    expected_payload = (
-        f"marketphoto_pack_{message.from_user.id}"
-    )
+    expected = f"marketphoto_pack_{message.from_user.id}"
 
     if (
-        payment.invoice_payload != expected_payload
+        payment.invoice_payload != expected
         or payment.currency != "XTR"
         or payment.total_amount != PACK_PRICE_STARS
     ):
-        logger.warning(
-            "Unexpected payment details for user %s",
-            message.from_user.id,
-        )
-
         await message.answer(
-            "Не вдалося перевірити платіж. Звернися до адміністратора."
+            "Не вдалося перевірити платіж."
         )
         return
 
     granted = record_payment_once(
         payment.telegram_payment_charge_id,
         message.from_user.id,
-        payment.total_amount,
-        payment.currency,
     )
 
     if granted:
         await message.answer(
-            f"✅ Оплата успішна!\n"
-            f"Додано генерацій: {PACK_CREDITS}",
+            f"✅ Оплату отримано!\nДодано {PACK_CREDITS} генерацій.",
             reply_markup=main_keyboard(),
         )
     else:
         await message.answer(
-            "Цей платіж уже був оброблений."
+            "Цей платіж уже оброблено."
         )
 
 
@@ -890,12 +1059,7 @@ async def successful_payment_handler(message: Message):
 # ============================================================
 
 @dp.callback_query()
-async def unknown_callback_handler(callback: CallbackQuery):
-    logger.warning(
-        "Unhandled callback data=%r",
-        callback.data,
-    )
-
+async def unknown_callback(callback: CallbackQuery):
     await callback.answer(
         "Кнопка застаріла. Відкрий /start і спробуй знову.",
         show_alert=True,
@@ -903,22 +1067,20 @@ async def unknown_callback_handler(callback: CallbackQuery):
 
 
 @dp.message()
-async def unknown_message_handler(
+async def unknown_message(
     message: Message,
     state: FSMContext,
 ):
-    current_state = await state.get_state()
+    current = await state.get_state()
 
     logger.warning(
-        "Unhandled message: user=%s state=%r type=%s",
-        message.from_user.id if message.from_user else None,
-        current_state,
+        "Unhandled update: content_type=%s state=%r",
         message.content_type,
+        current,
     )
 
     await message.answer(
-        "Не зрозумів повідомлення. Надішли текст, фото для редагування "
-        "або натисни /start.",
+        "Не зрозумів повідомлення. Натисни /start.",
         reply_markup=main_keyboard(),
     )
 
@@ -933,6 +1095,7 @@ async def health(request):
 
 async def start_web_server():
     app = web.Application()
+
     app.router.add_get("/", health)
     app.router.add_get("/health", health)
 
@@ -948,7 +1111,7 @@ async def start_web_server():
     await site.start()
 
     logger.info(
-        "Health server listening on 0.0.0.0:%s",
+        "Health server listening on port %s",
         PORT,
     )
 
@@ -962,17 +1125,16 @@ async def start_web_server():
 async def main():
     init_db()
 
-    # Render Web Service needs a listening HTTP port.
     runner = await start_web_server()
 
     try:
         logger.info(
-            "Starting MarketPhoto AI polling. Model=%s",
-            IMAGE_MODEL,
+            "Starting MarketPhoto AI. Model=%s",
+            CF_MODEL,
         )
 
-        # Clear webhook if one was previously configured.
-        # This does NOT stop another polling process using the same token.
+        # Ensure polling mode if webhook was configured previously.
+        # Stop any other process using the same Telegram token first.
         await bot.delete_webhook(drop_pending_updates=False)
 
         await dp.start_polling(
@@ -990,7 +1152,6 @@ async def main():
             pass
 
         await bot.session.close()
-        client.close()
 
 
 if __name__ == "__main__":
