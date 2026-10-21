@@ -1454,50 +1454,53 @@ def estimated_generation_progress(elapsed_seconds: float) -> int:
     return min(94, max(8, int(progress)))
 
 
-def generation_progress_text(
-    percent: int,
-    frame_index: int,
-    mode: str = "generate",
-) -> str:
-    """Годинник, рухома іскра, смужка та приблизний відсоток."""
+def generation_progress_text(percent: int, frame_index: int) -> str:
+    """Динамічна анімація у стилі перших версій Flux з рухомим прогресом."""
+    
+    # Список етапів генерації та підказок
+    stages = [
+        ("✨", "Ініціалізація та розбір промпту...", 15),
+        ("🧠", "Побудова латентного простору...", 35),
+        ("🎨", "Дифузія та синтез текстур...", 60),
+        ("🪄", "Деталізація контурів та світла...", 80),
+        ("💫", "Фінальний апскейл та кольорокорекція...", 95),
+    ]
+    
+    emoji, subtitle, percent = stages[frame_index % len(stages)]
+    spinner = ("◴", "◷", "◶", "◵")[frame_index % 4]
 
-    percent = max(8, min(94, int(percent)))
-    frame_index = max(0, int(frame_index))
+    # Шкала заповнюється залежно від поточного кроку (наприклад, 3 квадратики з 10 на першому кроці тощо)
+    filled_count = min(10, max(1, int((percent / 100) * 10)))
+    animated_bar = "█" * filled_count + "░" * (10 - filled_count)
 
-    clocks = (
-        "🕛", "🕐", "🕑", "🕒",
-        "🕓", "🕔", "🕕", "🕖",
-        "🕗", "🕘", "🕙", "🕚",
+    return (
+        "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+        "       <b>✨ MARKETPHOTO AI ✨</b>\n"
+        "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"{emoji} <b>ГЕНЕРАЦІЯ ЗОБРАЖЕННЯ</b>\n"
+        f"<i>{html.escape(subtitle)}</i>\n\n"
+        f"{spinner} <code>[{animated_bar}]</code>  <b>{percent}%</b>\n\n"
+        "⏳ <i>Нейромережа створює ваш шедевр...</i>"
     )
-    clock = clocks[frame_index % len(clocks)]
 
-    spinners = ("◴", "◷", "◶", "◵")
-    spinner = spinners[frame_index % len(spinners)]
 
-    if percent < 20:
-        phase_icon = "🚀"
-        headline = "ЗАПУСКАЮ МАСТЕРСКУЮ"
-        subtitle = "Подготавливаю идею и композицию"
-    elif percent < 35:
-        phase_icon = "🧠"
-        headline = "СОБИРАЮ ОБРАЗ"
-        subtitle = "Формирую главные объекты и формы"
-    elif percent < 52:
-        phase_icon = "🎨"
-        headline = "РАБОТАЮ С ЦВЕТОМ"
-        subtitle = "Подбираю оттенки, свет и атмосферу"
-    elif percent < 70:
-        phase_icon = "🪄"
-        headline = "ДОБАВЛЯЮ ДЕТАЛИ"
-        subtitle = "Дорабатываю внешний вид изображения"
-    elif percent < 85:
-        phase_icon = "💎"
-        headline = "ШЛИФУЮ РЕЗУЛЬТАТ"
-        subtitle = "Ожидаю ответ сервиса генерации"
-    else:
-        phase_icon = "✨"
-        headline = "ОЖИДАЮ ИЗОБРАЖЕНИЕ"
-        subtitle = "Результат ещё обрабатывается"
+async def animate_generation(status_message: Message) -> None:
+    """Плавне оновлення кроків і відсотків анімації."""
+    frame_index = 0
+
+    while True:
+        await asyncio.sleep(2.5)  # Інтервал між оновленнями кадрів
+
+        try:
+            await status_message.edit_text(
+                generation_progress_text(5, frame_index)
+            )
+        except TelegramAPIError as exc:
+            log.debug("Could not update generation animation: %s", exc)
+        except Exception:
+            log.exception("Unexpected generation animation error")
+
+        frame_index += 1
 
     mode_names = {
         "generate": "🎨 Создание изображения",
