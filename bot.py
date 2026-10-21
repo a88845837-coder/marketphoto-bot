@@ -1253,58 +1253,130 @@ def estimated_generation_progress(elapsed_seconds: float) -> int:
 
 
 def generation_progress_text(percent: int, frame_index: int, mode: str = "generate") -> str:
-    """Render one polished frame of the animated generation status."""
-    percent = max(8, min(92, int(percent)))
-
-    # The phase follows the estimated percentage, while small decorative details animate.
-    phases = [
-        ("🚀", "ГОТОВЛЮ КОМПОЗИЦИЮ", "Подготавливаю сцену и раскладываю визуальные детали"),
-        ("🧠", "СОБИРАЮ ОБРАЗ", "Прорабатываются персонажи, формы и основные элементы"),
-        ("🎨", "РАБОТАЮ С ЦВЕТОМ", "Настраиваются свет, оттенки, материалы и атмосфера"),
-        ("🪄", "ДОБАВЛЯЮ ДЕТАЛИ", "Собираются мелкие детали и финальный вид изображения"),
-        ("✨", "ФИНИШНЫЕ ШТРИХИ", "Жду, пока сервис вернёт готовый файл"),
-    ]
-    phase_index = min(len(phases) - 1, max(0, (percent - 8) // 17))
-    emoji, headline, subtitle = phases[phase_index]
-
-    spinner_frames = ("◐", "◓", "◑", "◒")
-    sparkle_frames = ("✦ ✧ ✦", "✧ ✦ ✧", "✨ · ✨", "· ✨ ·")
-    spinner = spinner_frames[frame_index % len(spinner_frames)]
-    sparkles = sparkle_frames[frame_index % len(sparkle_frames)]
-
-    bar_length = 20
-    filled = max(1, min(bar_length, round(percent / 100 * bar_length)))
-    bar = "🟦" * filled + "▫️" * (bar_length - filled)
-
     mode_names = {
-        "generate": "Свободная генерация",
-        "avatar": "Аватарка",
-        "wallpaper": "Обои на телефон",
-        "edit": "Редактирование фото",
-        "product": "Фото товара",
-        "meme": "Мем",
-        "youtube_cover": "Обложка YouTube",
+        "generate": "Создание изображения",
+        "avatar": "Создание аватарки",
+        "wallpaper": "Создание обоев",
+        "edit": "Магия редактирования",
+        "product": "Дизайн товара",
+        "meme": "Создание мема",
+        "youtube_cover": "Дизайн обложки",
         "clothing": "Дизайн одежды",
-        "poster": "Постер",
-        "character": "Дизайн персонажа",
-        "preset": "Выбранный стиль",
+        "poster": "Создание постера",
+        "character": "Создание персонажа",
+        "preset": "Художественный стиль",
     }
-    mode_name = html.escape(mode_names.get(mode, "Создание изображения"))
+
+    mode_name = mode_names.get(mode, "Создание изображения")
+
+    frames = [
+        (
+            "　　✦　　　　　　　　　🫧\n"
+            "✨　　　　🪄　　　　　　　　✧\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　✨ <b>ОЖИВЛЯЮ ИДЕЮ</b> ✨\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　　 🌀 Пиксели просыпаются\n\n"
+            "　✨ ▰▱▱▱▱▱▱▱▱▱ 🫧\n"
+            "🌟　　　　　　　　　　　✦"
+        ),
+        (
+            "🫧　　　　　　　✧　　　　　　✨\n"
+            "　　　🌈　　　　　　　🪄\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　🎨 <b>СОБИРАЮ КОМПОЗИЦИЮ</b>\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　　Подбираю свет и цвета\n\n"
+            "　🫧 ▱▰▱▱▱▱▱▱▱▱ ✨\n"
+            "　　　　✦　　　　　　　　🌟"
+        ),
+        (
+            "　　　　🌟　　　🫧\n"
+            "✧　　　　　　　　　✨　　　　🌀\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　🪄 <b>ТВОРЧЕСКАЯ МАГИЯ</b>\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　 Детали складываются вместе\n\n"
+            "　✨ ▱▱▰▱▱▱▱▱▱▱ 🌈\n"
+            "🪄　　　　　　　　　　　　　✦"
+        ),
+        (
+            "✨　　　　　　　　　🌀\n"
+            "　　　✦　　　　　　🫧　　　🌟\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　🌈 <b>ДОБАВЛЯЮ КРАСКИ</b> ✨\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　 Настраиваю атмосферу\n\n"
+            "　🫧 ▱▱▱▰▱▱▱▱▱▱ 🎨\n"
+            "　　　　🪄　　　　　　　✧"
+        ),
+        (
+            "　　　　🪄　　　　　　　　✨\n"
+            "🌟　　　　　　🫧　　　　　　　　✦\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　💎 <b>ПРОРАБАТЫВАЮ ДЕТАЛИ</b>\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　Маленькие детали оживают\n\n"
+            "　🌟 ▱▱▱▱▰▱▱▱▱▱ 🫧\n"
+            "✧　　　　　　　　　　　🎨"
+        ),
+        (
+            "🫧　　　　　　　　　　　✦\n"
+            "　　　　✨　　　　🌈　　　　　🪄\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　✨ <b>ПОСЛЕДНИЕ ШТРИХИ</b> ✨\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　 Собираю финальный образ\n\n"
+            "　🎨 ▱▱▱▱▱▰▱▱▱▱ 🌟\n"
+            "　　　　　🌀　　　　　　　✧"
+        ),
+        (
+            "　　　　✧　　　　　　🪄\n"
+            "✨　　　　　　　　　　　　🫧\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　🌟 <b>УЖЕ СОВСЕМ СКОРО</b>\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　 Завершаю волшебство\n\n"
+            "　🫧 ▱▱▱▱▱▱▰▱▱▱ ✨\n"
+            "🌈　　　　　　　✦　　　　　🌟"
+        ),
+        (
+            "🌟　　　　　🫧　　　　　　　✨\n"
+            "　　　✧　　　　　　　　🪄\n\n"
+            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+            "　💫 <b>ФОРМИРУЮ РЕЗУЛЬТАТ</b>\n"
+            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+            "　　　Готовлю изображение\n\n"
+            "　✨ ▱▱▱▱▱▱▱▰▱▱ 🌈\n"
+            "　　　　🌀　　　　　　　　✦"
+        ),
+    ]
+
+    frame = frames[frame_index % len(frames)]
 
     return (
-        "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n"
-        f"   {sparkles}\n"
-        "       <b>✨ MARKETPHOTO AI ✨</b>\n"
-        "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
-        f"{emoji} <b>{headline}</b>  {spinner}\n"
-        f"<i>{html.escape(subtitle)}</i>\n\n"
-        f"{bar}\n"
-        f"⚡ <b>{percent}%</b>  <i>создание изображения</i>\n\n"
-        f"🎨 <b>Режим:</b> {mode_name}\n"
-        "<i>Процент приблизительный: Cloudflare не передаёт настоящий ход генерации.</i>"
+        "🎨 <b>MARKETPHOTO AI</b>\n"
+        f"<i>{mode_name}</i>\n\n"
+        f"{frame}\n\n"
+        "<i>✨ Творчество в движении…</i>"
     )
 
 
+async def animate_generation(status_message: Message, mode: str = "generate") -> None:
+    frame_index = 0
+
+    while True:
+        text = generation_progress_text(0, frame_index, mode)
+
+        try:
+            await status_message.edit_text(text)
+        except TelegramAPIError as exc:
+            log.debug("Animation frame update skipped: %s", exc)
+        except Exception:
+            log.exception("Generation animation update failed")
+
+        frame_index += 1
+        await asyncio.sleep(1.6)
 async def animate_generation(status_message: Message, mode: str = "generate") -> None:
     """Show an animated, non-blocking status message until generation finishes."""
     started = time.monotonic()
