@@ -1252,115 +1252,83 @@ def estimated_generation_progress(elapsed_seconds: float) -> int:
     return min(92, max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0)))))
 
 
-def generation_progress_text(percent: int, frame_index: int, mode: str = "generate") -> str:
-    mode_names = {
-        "generate": "Создание изображения",
-        "avatar": "Создание аватарки",
-        "wallpaper": "Создание обоев",
-        "edit": "Магия редактирования",
-        "product": "Дизайн товара",
-        "meme": "Создание мема",
-        "youtube_cover": "Дизайн обложки",
-        "clothing": "Дизайн одежды",
-        "poster": "Создание постера",
-        "character": "Создание персонажа",
-        "preset": "Художественный стиль",
-    }
-
-    mode_name = mode_names.get(mode, "Создание изображения")
+def generation_progress_text(percent: int, frame_index: int) -> str:
+    """Красива анімація генерування зображення з неоновими емодзі та прогресом."""
+    percent = 5
 
     frames = [
         (
-            "　　✦　　　　　　　　　🫧\n"
-            "✨　　　　🪄　　　　　　　　✧\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　✨ <b>ОЖИВЛЯЮ ИДЕЮ</b> ✨\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　　 🌀 Пиксели просыпаются\n\n"
-            "　✨ ▰▱▱▱▱▱▱▱▱▱ 🫧\n"
-            "🌟　　　　　　　　　　　✦"
+            "🌟",
+            "МАГІЯ ТВОРЧОСТІ ЗАПУЩЕНА",
+            "Нейромережа готує основу для майбутнього шедевру",
         ),
         (
-            "🫧　　　　　　　✧　　　　　　✨\n"
-            "　　　🌈　　　　　　　🪄\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　🎨 <b>СОБИРАЮ КОМПОЗИЦИЮ</b>\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　　Подбираю свет и цвета\n\n"
-            "　🫧 ▱▰▱▱▱▱▱▱▱▱ ✨\n"
-            "　　　　✦　　　　　　　　🌟"
+            "✨",
+            "КОМПОЗИЦІЯ ЗБИРАЄТЬСЯ",
+            "Пропрацьовуємо деталі, світло та атмосферу",
         ),
         (
-            "　　　　🌟　　　🫧\n"
-            "✧　　　　　　　　　✨　　　　🌀\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　🪄 <b>ТВОРЧЕСКАЯ МАГИЯ</b>\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　 Детали складываются вместе\n\n"
-            "　✨ ▱▱▰▱▱▱▱▱▱▱ 🌈\n"
-            "🪄　　　　　　　　　　　　　✦"
+            "🔮",
+            "МАГІЧНІ ШТРИХИ ТА КОЛЬОРИ",
+            "Нейромережа налаштовує стиль і гармонію",
         ),
         (
-            "✨　　　　　　　　　🌀\n"
-            "　　　✦　　　　　　🫧　　　🌟\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　🌈 <b>ДОБАВЛЯЮ КРАСКИ</b> ✨\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　 Настраиваю атмосферу\n\n"
-            "　🫧 ▱▱▱▰▱▱▱▱▱▱ 🎨\n"
-            "　　　　🪄　　　　　　　✧"
+            "🎨",
+            "СТВОРЮЄМО КАРТИНКУ",
+            "Малюємо фінальні елементи та текстури",
         ),
         (
-            "　　　　🪄　　　　　　　　✨\n"
-            "🌟　　　　　　🫧　　　　　　　　✦\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　💎 <b>ПРОРАБАТЫВАЮ ДЕТАЛИ</b>\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　Маленькие детали оживают\n\n"
-            "　🌟 ▱▱▱▱▰▱▱▱▱▱ 🫧\n"
-            "✧　　　　　　　　　　　🎨"
+            "💫",
+            "МАЙЖЕ ГОТОВО",
+            "Збираємо все в єдиний ідеальний кадр",
         ),
         (
-            "🫧　　　　　　　　　　　✦\n"
-            "　　　　✨　　　　🌈　　　　　🪄\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　✨ <b>ПОСЛЕДНИЕ ШТРИХИ</b> ✨\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　 Собираю финальный образ\n\n"
-            "　🎨 ▱▱▱▱▱▰▱▱▱▱ 🌟\n"
-            "　　　　　🌀　　　　　　　✧"
-        ),
-        (
-            "　　　　✧　　　　　　🪄\n"
-            "✨　　　　　　　　　　　　🫧\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　🌟 <b>УЖЕ СОВСЕМ СКОРО</b>\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　 Завершаю волшебство\n\n"
-            "　🫧 ▱▱▱▱▱▱▰▱▱▱ ✨\n"
-            "🌈　　　　　　　✦　　　　　🌟"
-        ),
-        (
-            "🌟　　　　　🫧　　　　　　　✨\n"
-            "　　　✧　　　　　　　　🪄\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━╮\n"
-            "　💫 <b>ФОРМИРУЮ РЕЗУЛЬТАТ</b>\n"
-            "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "　　　Готовлю изображение\n\n"
-            "　✨ ▱▱▱▱▱▱▱▰▱▱ 🌈\n"
-            "　　　　🌀　　　　　　　　✦"
+            "🚀",
+            "ФІНІШНА ПРЯМА",
+            "За мить відправимо результат у чат!",
         ),
     ]
 
-    frame = frames[frame_index % len(frames)]
+    emoji, headline, subtitle = frames[frame_index % len(frames)]
+    spinner = ("◴", "◷", "◶", "◵")[frame_index % 4]
+
+    blocks = ["▫️"] * 10
+    active_block_icons = ["🟦", "🟣", "✨", "💜"]
+    blocks[frame_index % len(blocks)] = active_block_icons[frame_index % len(active_block_icons)]
+    animated_bar = "".join(blocks)
 
     return (
-        "🎨 <b>MARKETPHOTO AI</b>\n"
-        f"<i>{mode_name}</i>\n\n"
-        f"{frame}\n\n"
-        "<i>✨ Творчество в движении…</i>"
+        "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+        "       <b>✨ MARKETPHOTO AI ✨</b>\n"
+        "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"{emoji} <b>{headline}</b>\n"
+        f"<i>{html.escape(subtitle)}</i>\n\n"
+        f"{spinner} <code>{animated_bar}</code>  <b>{percent}%</b>\n\n"
+        "🔮 <b>Режим:</b> генерація зображення\n"
+        "⏳ <i>Індикатор залишається на 5% до готового файлу.</i>"
     )
 
+
+async def animate_generation(status_message: Message) -> None:
+    """Плавна анімація статусу без переривання процесу генерації."""
+    frame_index = 0
+
+    while True:
+        await asyncio.sleep(2.8)
+
+        try:
+            await status_message.edit_text(
+                generation_progress_text(5, frame_index)
+            )
+        except TelegramAPIError as exc:
+            log.debug(
+                "Could not update generation animation: %s",
+                exc,
+            )
+        except Exception:
+            log.exception("Unexpected generation animation error")
+
+        frame_index += 1
 
 async def animate_generation(status_message: Message, mode: str = "generate") -> None:
     frame_index = 0
