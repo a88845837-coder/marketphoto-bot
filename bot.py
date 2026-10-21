@@ -1,4 +1,4 @@
-# BUILD_ID: marketphoto-creator-suite-animated-gif-2026-10-21-v9
+# BUILD_ID: marketphoto-creator-suite-stable-2026-10-20-v8
 from __future__ import annotations
 
 import asyncio
@@ -38,7 +38,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 
-BUILD_ID = "marketphoto-creator-suite-animated-gif-2026-10-21-v9"
+BUILD_ID = "marketphoto-creator-suite-stable-2026-10-20-v8"
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -1246,171 +1246,103 @@ def save_report(
         return int(cursor.lastrowid)
 
 
-def make_loading_gif(mode: str = "generate") -> bytes:
-    """Build a real looping GIF with moving neon rings, particles, and sparkles."""
-    width, height = 440, 440
-    frame_count = 36
-    center_x, center_y = width // 2, 177
+def estimated_generation_progress(elapsed_seconds: float) -> int:
+    """A moving waiting-time estimate, not the model's internal progress."""
+    elapsed = max(0.0, float(elapsed_seconds))
+    # A rough waiting estimate drives the filling bar; the numeric value is not displayed.
+    return min(92, max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0)))))
 
-    titles = {
-        "generate": "СОЗДАНИЕ ИЗОБРАЖЕНИЯ",
-        "avatar": "СОЗДАНИЕ АВАТАРКИ",
-        "wallpaper": "СОЗДАНИЕ ОБОЕВ",
-        "edit": "МАГИЯ РЕДАКТИРОВАНИЯ",
-        "product": "ДИЗАЙН ТОВАРА",
-        "meme": "СОЗДАНИЕ МЕМА",
-        "youtube_cover": "ДИЗАЙН ОБЛОЖКИ",
-        "clothing": "ДИЗАЙН ОДЕЖДЫ",
-        "poster": "СОЗДАНИЕ ПОСТЕРА",
-        "character": "СОЗДАНИЕ ПЕРСОНАЖА",
-        "preset": "ХУДОЖЕСТВЕННЫЙ СТИЛЬ",
-    }
-    subtitle = titles.get(mode, "СОЗДАНИЕ ИЗОБРАЖЕНИЯ")
 
-    # Make a soft navy-to-blue background once, then reuse it for each frame.
-    background = Image.new("RGB", (width, height))
-    pixels = background.load()
-    for y in range(height):
-        for x in range(width):
-            dx = (x - center_x) / 330.0
-            dy = (y - center_y) / 330.0
-            glow = max(0.0, 1.0 - math.sqrt(dx * dx + dy * dy))
-            pixels[x, y] = (
-                min(255, int(7 + 10 * glow)),
-                min(255, int(10 + 17 * glow)),
-                min(255, int(29 + 59 * glow)),
-            )
+def generation_progress_text(percent: int, frame_index: int, mode: str = "generate") -> str:
+    """Animated text-only progress screen with rotating clock emojis and a filling bar."""
+    percent = max(8, min(92, int(percent)))
 
-    font_title = _font_for_image(25)
-    font_subtitle = _font_for_image(17)
-    font_small = _font_for_image(15)
+    # These emojis change on each Telegram message edit, creating a small moving clock.
+    clocks = ("🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚")
+    clock = clocks[frame_index % len(clocks)]
 
-    stars = [
-        (35, 63), (404, 74), (55, 143), (390, 160), (33, 245),
-        (407, 276), (78, 300), (365, 317), (110, 83), (337, 100),
-        (96, 226), (352, 224), (132, 270), (304, 285), (220, 58),
-        (260, 301), (58, 338), (380, 350),
+    phases = [
+        ("🚀", "ЗАПУСКАЮ МАСТЕРСКУЮ", "Подготавливаю идею и композицию"),
+        ("🧠", "СОБИРАЮ ОБРАЗ", "Персонажи и формы постепенно складываются вместе"),
+        ("🎨", "РАБОТАЮ С ЦВЕТОМ", "Подбираю свет, оттенки и атмосферу"),
+        ("🪄", "ДОБАВЛЯЮ ДЕТАЛИ", "Маленькие детали оживают на картинке"),
+        ("💎", "ШЛИФУЮ РЕЗУЛЬТАТ", "Остаются последние творческие штрихи"),
+        ("✨", "ПОЧТИ ГОТОВО", "Жду готовое изображение от сервиса"),
     ]
-    frames = []
+    phase_index = min(len(phases) - 1, max(0, (percent - 8) // 15))
+    phase_icon, headline, subtitle = phases[phase_index]
 
-    for frame_index in range(frame_count):
-        frame = background.copy()
-        draw = ImageDraw.Draw(frame)
-        angle = frame_index * (360.0 / frame_count)
+    mode_names = {
+        "generate": "Свободная генерация",
+        "avatar": "Аватарка",
+        "wallpaper": "Обои на телефон",
+        "edit": "Редактирование фото",
+        "product": "Фото товара",
+        "meme": "Мем",
+        "youtube_cover": "Обложка YouTube",
+        "clothing": "Дизайн одежды",
+        "poster": "Постер",
+        "character": "Дизайн персонажа",
+        "preset": "Выбранный стиль",
+    }
+    mode_name = html.escape(mode_names.get(mode, "Создание изображения"))
 
-        # Tiny stars twinkle and drift, not just change the status text.
-        for i, (sx, sy) in enumerate(stars):
-            phase = (frame_index + i * 3) % 10
-            radius = 1 + (1 if phase in (0, 1, 2, 7) else 0)
-            drift_x = int(math.sin(math.radians(angle + i * 19)) * 3)
-            drift_y = int(math.cos(math.radians(angle + i * 23)) * 3)
-            colour = (115, 225, 255) if i % 2 == 0 else (203, 145, 255)
-            x, y = sx + drift_x, sy + drift_y
-            draw.ellipse((x-radius, y-radius, x+radius, y+radius), fill=colour)
+    # A progressive bar plus a sparkle that slides across the filled portion.
+    width = 14
+    filled = max(1, min(width - 1, round(percent / 100 * width)))
+    bar_slots = ["▫️"] * width
+    for slot in range(filled):
+        bar_slots[slot] = "🟦"
+    shine_pos = frame_index % filled
+    bar_slots[shine_pos] = "✨"
+    bar = "".join(bar_slots)
 
-        # Orbit outlines.
-        draw.ellipse(
-            (center_x-126, center_y-104, center_x+126, center_y+104),
-            outline=(35, 56, 103), width=2,
-        )
-        draw.ellipse(
-            (center_x-105, center_y-87, center_x+105, center_y+87),
-            outline=(37, 57, 111), width=2,
-        )
-        draw.ellipse(
-            (center_x-79, center_y-66, center_x+79, center_y+66),
-            outline=(30, 49, 90), width=2,
-        )
-
-        # Two moving neon arcs orbit in different directions.
-        draw.arc(
-            (center_x-126, center_y-104, center_x+126, center_y+104),
-            start=int(angle), end=int(angle+105), fill=(76, 225, 255), width=7,
-        )
-        draw.arc(
-            (center_x-105, center_y-87, center_x+105, center_y+87),
-            start=int(235-angle*1.45), end=int(290-angle*1.45),
-            fill=(193, 111, 255), width=6,
-        )
-
-        # Orbiting light particles.
-        for i in range(7):
-            theta = math.radians(angle + i * (360.0 / 7))
-            ox = center_x + math.cos(theta) * 116
-            oy = center_y + math.sin(theta) * 95
-            radius = 5 if i == (frame_index // 3) % 7 else 3
-            particle_colour = (171, 246, 255) if i % 2 == 0 else (224, 190, 255)
-            draw.ellipse(
-                (int(ox-radius), int(oy-radius), int(ox+radius), int(oy+radius)),
-                fill=particle_colour,
-            )
-
-        # Rotating crystal in the centre.
-        crystal_points = []
-        for i in range(8):
-            theta = math.radians(angle + i * 45)
-            radius = 42 if i % 2 == 0 else 24
-            crystal_points.append((
-                int(center_x + math.cos(theta) * radius),
-                int(center_y + math.sin(theta) * radius),
-            ))
-        draw.polygon(crystal_points, fill=(41, 102, 175), outline=(140, 242, 255))
-
-        # A bright moving sweep around the crystal.
-        sweep_theta = math.radians(-angle * 1.9)
-        sx = int(center_x + math.cos(sweep_theta) * 56)
-        sy = int(center_y + math.sin(sweep_theta) * 45)
-        draw.ellipse((sx-6, sy-6, sx+6, sy+6), fill=(247, 252, 255))
-        draw.ellipse((sx-11, sy-11, sx+11, sy+11), outline=(90, 206, 255), width=2)
-
-        # Small floating diamond-shaped glints.
-        for i in range(5):
-            theta = math.radians(angle * 1.4 + i * 72)
-            gx = int(center_x + math.cos(theta) * (61 + (i % 2) * 8))
-            gy = int(center_y + math.sin(theta) * (53 + (i % 2) * 5))
-            draw.polygon(
-                [(gx, gy-4), (gx+3, gy), (gx, gy+4), (gx-3, gy)],
-                fill=(211, 248, 255) if i % 2 == 0 else (224, 192, 255),
-            )
-
-        # Branding, mode title, and animated dots with no numeric progress.
-        brand = "MARKETPHOTO AI"
-        bbox = draw.textbbox((0, 0), brand, font=font_title)
-        draw.text(((width-(bbox[2]-bbox[0]))//2, 322), brand,
-                  font=font_title, fill=(244, 248, 255))
-
-        bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
-        draw.text(((width-(bbox[2]-bbox[0]))//2, 365), subtitle,
-                  font=font_subtitle, fill=(117, 221, 255))
-
-        tagline = "ТВОРЧЕСКАЯ МАГИЯ В ДВИЖЕНИИ"
-        bbox = draw.textbbox((0, 0), tagline, font=font_small)
-        draw.text(((width-(bbox[2]-bbox[0]))//2, 394), tagline,
-                  font=font_small, fill=(170, 185, 220))
-
-        dot_xs = [175, 197, 219, 241, 263]
-        active_dot = frame_index % len(dot_xs)
-        for i, dot_x in enumerate(dot_xs):
-            r = 5 if i == active_dot else 3
-            colour = (116, 234, 255) if i == active_dot else (63, 91, 151)
-            draw.ellipse((dot_x-r, 422-r, dot_x+r, 422+r), fill=colour)
-
-        frames.append(frame)
-
-    output = io.BytesIO()
-    # Animated GIF is looped by Telegram while the real model request runs.
-    frames[0].save(
-        output,
-        format="GIF",
-        save_all=True,
-        append_images=frames[1:],
-        duration=80,
-        loop=0,
-        optimize=True,
-        disposal=2,
+    # A tiny sparkle trail also changes location every frame.
+    trails = (
+        "✦ · · · · ·",
+        "· ✧ · · · ·",
+        "· · ✦ · · ·",
+        "· · · ✧ · ·",
+        "· · · · ✦ ·",
+        "· · · · · ✧",
     )
-    return output.getvalue()
+    trail = trails[frame_index % len(trails)]
+    spinners = ("◜", "◝", "◞", "◟")
+    spinner = spinners[frame_index % len(spinners)]
 
+    return (
+        "╭━━━━━━━━━━━━━━━━━━━━━━━━╮\n"
+        "       <b>✨ MARKETPHOTO AI</b>\n"
+        "╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"{clock} {phase_icon} <b>{headline}</b> {spinner}\n"
+        f"<i>{html.escape(subtitle)}</i>\n\n"
+        f"<code>{bar}</code>\n"
+        f"　　 {trail}\n\n"
+        f"🎨 <b>Режим:</b> {mode_name}\n"
+        "<i>Создаю изображение — полоска заполняется, огоньки движутся…</i>"
+    )
+
+
+async def animate_generation(status_message: Message, mode: str = "generate") -> None:
+    """Update the text animation until generation completes."""
+    started = time.monotonic()
+    frame_index = 1  # frame zero is shown by begin_generation before this task starts
+
+    while True:
+        elapsed = time.monotonic() - started
+        percent = estimated_generation_progress(elapsed)
+        try:
+            await status_message.edit_text(
+                generation_progress_text(percent, frame_index, mode)
+            )
+        except TelegramAPIError as exc:
+            # Telegram sometimes rate-limits edits; keep the generation alive.
+            log.debug("Could not update generation animation: %s", exc)
+        except Exception:
+            log.exception("Unexpected generation animation error")
+
+        frame_index += 1
+        await asyncio.sleep(2.2)
 
 async def stop_generation_animation(
     animation_task: asyncio.Task[None] | None,
@@ -1587,17 +1519,14 @@ async def begin_generation(
     try:
         reservation = reserve_generation(user_id)
 
-        gif_bytes = await asyncio.to_thread(make_loading_gif, mode)
-        status_message = await message.answer_animation(
-            animation=BufferedInputFile(
-                gif_bytes,
-                filename="marketphoto_loading.gif",
-            ),
-            caption="✨ <b>MARKETPHOTO AI</b>\n🪄 Создаю изображение...",
+        status_message = await message.answer(
+            generation_progress_text(8, 0, mode),
             reply_markup=MAIN_MENU,
         )
-        # The GIF animates inside Telegram itself; no text-edit loop is needed.
-        animation_task = None
+
+        animation_task = asyncio.create_task(
+            animate_generation(status_message, mode)
+        )
 
         if bot:
             await bot.send_chat_action(
@@ -1634,9 +1563,19 @@ async def begin_generation(
 
         if status_message:
             try:
-                await status_message.delete()
+                await status_message.edit_text(
+                    "╭━━━━━━━━━━━━━━━━━━━━━━━━╮\n"
+                    "       <b>✨ MARKETPHOTO AI</b>\n"
+                    "╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
+                    "✅ <b>ТВОЯ КАРТИНКА ГОТОВА!</b>\n\n"
+                    "🖼️ <i>Изображение создано и отправлено в чат.</i>\n"
+                    "🌟 <i>Нажми «Ещё вариант», чтобы попробовать другой образ.</i>"
+                )
             except Exception as exc:
-                log.debug("Could not remove loading GIF after success: %s", exc)
+                log.debug(
+                    "Could not show completed progress (image already sent): %s",
+                    exc,
+                )
 
         log.info(
             "Generation success user_id=%s mode=%s model=%s",
@@ -1656,11 +1595,21 @@ async def begin_generation(
 
         if status_message:
             try:
-                await status_message.delete()
-            except Exception as delete_exc:
-                log.debug("Could not remove loading GIF after error: %s", delete_exc)
-
-        await message.answer(answer, reply_markup=MAIN_MENU)
+                await status_message.edit_text(answer)
+            except Exception as edit_exc:
+                log.debug(
+                    "Could not edit generation error status: %s",
+                    edit_exc,
+                )
+                await message.answer(
+                    answer,
+                    reply_markup=MAIN_MENU,
+                )
+        else:
+            await message.answer(
+                answer,
+                reply_markup=MAIN_MENU,
+            )
 
         log.warning(
             "Generation failed user_id=%s: %s",
@@ -1687,11 +1636,21 @@ async def begin_generation(
 
         if status_message:
             try:
-                await status_message.delete()
-            except Exception as delete_exc:
-                log.debug("Could not remove loading GIF after failure: %s", delete_exc)
-
-        await message.answer(text, reply_markup=MAIN_MENU)
+                await status_message.edit_text(text)
+            except Exception as edit_exc:
+                log.debug(
+                    "Could not edit generation failure status: %s",
+                    edit_exc,
+                )
+                await message.answer(
+                    text,
+                    reply_markup=MAIN_MENU,
+                )
+        else:
+            await message.answer(
+                text,
+                reply_markup=MAIN_MENU,
+            )
 
     finally:
         await stop_generation_animation(animation_task)
@@ -1975,7 +1934,7 @@ async def cmd_stats(message: Message) -> None:
             "SELECT COUNT(*) n FROM generation_history"
         ).fetchone()["n"]
 
-        today = day_key()
+        today = today_key()
         generations_today_n = db.execute(
             "SELECT COUNT(*) n FROM generation_history WHERE substr(created_at, 1, 10)=?",
             (today,),
@@ -3043,6 +3002,8 @@ async def main() -> None:
                     allowed_updates=dp.resolve_used_update_types(),
                 )
 
+                # A normal return usually means Render is shutting the service down
+                # or the dispatcher was deliberately stopped; don't create a restart loop.
                 polling_active = False
                 log.info("Telegram polling stopped normally; shutting down cleanly")
                 break
@@ -3053,6 +3014,7 @@ async def main() -> None:
                     "TelegramConflictError: another process is polling this same bot token. "
                     "Stop every other local/Render instance and leave exactly one poller running."
                 )
+                # A conflict won't fix itself while a second instance is running.
                 raise
 
             except (KeyboardInterrupt, SystemExit):
