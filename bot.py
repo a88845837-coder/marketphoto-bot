@@ -843,7 +843,7 @@ def extract_image_response(response: httpx.Response) -> bytes:
         if 3040 in codes:
             raise UserFacingError(
                 "Cloudflare временно перегружен. Подожди немного и повтори попытку. "
-                "Лимит за неудачную попытку возвращён."
+                "Лимит за неудачную генерацию возвращён."
             )
 
         if response.status_code in (401, 403):
@@ -1250,56 +1250,86 @@ def estimated_generation_progress(elapsed_seconds: float) -> int:
     """A moving waiting-time estimate, not the model's internal progress."""
     elapsed = max(0.0, float(elapsed_seconds))
     # A rough waiting estimate drives the filling bar; the numeric value is not displayed.
-    return min(92, max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0)))))
+    return min(92, max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0))))
 
 
 def generation_progress_text(percent: int, frame_index: int, mode: str = "generate") -> str:
-    """Динамічна анімація прогресу генерації MarketPhoto AI."""
-
-    stages = [
-        ("✨", "Ініціалізація та розбір промпту...", 15),
-        ("🧠", "Побудова латентного простору...", 35),
-        ("🎨", "Дифузія та синтез текстур...", 60),
-        ("🪄", "Деталізація контурів та світла...", 80),
-        ("💫", "Фінальний апскейл та кольорокорекція...", 95),
-    ]
-
-    emoji, subtitle, stage_percent = stages[
-        frame_index % len(stages)
-    ]
+    """Створює кадр анімації з відсотком і шкалою, що рухаються."""
+    current_percent = min(100, max(0, int(percent)))
     spinner = ("◴", "◷", "◶", "◵")[frame_index % 4]
 
-    filled_count = min(10, max(1, int((stage_percent / 100) * 10)))
-    animated_bar = "█" * filled_count + "░" * (10 - filled_count)
+    if current_percent >= 100:
+        emoji = "⏳"
+        subtitle = "Ожидайте, завершается генерация..."
+        footer = "⏳ <i>Ожидайте, результат скоро появится в чате.</i>"
+    elif current_percent <= 15:
+        emoji = "✨"
+        subtitle = "Инициализация и разбор промпта..."
+        footer = "⏳ <i>Нейросеть готовит изображение...</i>"
+    elif current_percent <= 35:
+        emoji = "🧠"
+        subtitle = "Построение латентного пространства..."
+        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
+    elif current_percent <= 60:
+        emoji = "🎨"
+        subtitle = "Диффузия и синтез текстур..."
+        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
+    elif current_percent <= 80:
+        emoji = "🪄"
+        subtitle = "Детализация контуров и света..."
+        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
+    else:
+        emoji = "💫"
+        subtitle = "Финальная детализация изображения..."
+        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
+
+    # 20 позиций с частичными блоками: полоса меняется вместе с процентом.
+    bar_width = 20
+    filled = current_percent * bar_width / 100.0
+    full_count = int(filled)
+    remainder = filled - full_count
+    partial_chars = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉")
+    partial_index = min(7, int(remainder * 8))
+    animated_bar = "█" * full_count
+    if full_count < bar_width and partial_index:
+        animated_bar += partial_chars[partial_index]
+    animated_bar += "░" * max(0, bar_width - len(animated_bar))
 
     return (
         "╭━━━━━━━━━━━━━━━━━━━━╮\n"
         "       <b>✨ MARKETPHOTO AI ✨</b>\n"
         "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
-        f"{emoji} <b>ГЕНЕРАЦІЯ ЗОБРАЖЕННЯ</b>\n"
+        f"{emoji} <b>ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ</b>\n"
         f"<i>{html.escape(subtitle)}</i>\n\n"
-        f"{spinner} <code>[{animated_bar}]</code>  <b>{stage_percent}%</b>\n\n"
-        "⏳ <i>Нейромережа створює ваш шедевр...</i>"
+        f"{spinner} <code>[{animated_bar}]</code>  <b>{current_percent}%</b>\n\n"
+        f"{footer}"
     )
 
 
 async def animate_generation(status_message: Message, mode: str = "generate") -> None:
-    """Плавне оновлення текстової анімації під час генерації."""
+    """Каждую секунду увеличивает процент до 100%, затем показывает ожидание."""
+    percent = 8
     frame_index = 0
 
     while True:
-        await asyncio.sleep(2.5)
+        await asyncio.sleep(1)
+        if percent < 100:
+            percent += 1
 
         try:
             await status_message.edit_text(
-                generation_progress_text(5, frame_index, mode)
+                generation_progress_text(percent, frame_index, mode),
+                parse_mode=ParseMode.HTML,
             )
         except TelegramAPIError as exc:
-            log.debug("Could not update generation animation: %s", exc)
+            error_text = str(exc).lower()
+            if "message is not modified" not in error_text:
+                log.debug("Could not update generation animation: %s", exc)
         except Exception:
             log.exception("Unexpected generation animation error")
 
         frame_index += 1
+
 
 async def stop_generation_animation(
     animation_task: asyncio.Task[None] | None,
@@ -3007,4 +3037,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         log.info("MarketPhoto AI stopped")
- 
