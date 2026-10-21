@@ -1520,9 +1520,12 @@ async def begin_generation(
         reservation = reserve_generation(user_id)
 
         status_message = await message.answer(
-            generation_progress_text(8, 0, mode),
-            reply_markup=MAIN_MENU,
-        )
+    generation_progress_text(8, 0, mode)
+)
+
+animation_task = asyncio.create_task(
+    animate_generation(status_message, mode)
+)
 
         animation_task = asyncio.create_task(
             animate_generation(status_message, mode)
