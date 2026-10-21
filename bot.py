@@ -124,46 +124,130 @@ MAIN_MENU = ReplyKeyboardMarkup(
 )
 
 STYLE_PRESETS: dict[str, tuple[str, str]] = {
-    "realism": ("📸 Реализм", "Photorealistic image, natural materials and skin texture, professional camera photography, balanced exposure, realistic shadows, crisp details, tasteful color grading."),
-    "anime": ("🌸 Аниме", "High-quality Japanese anime illustration, expressive character design, clean line art, beautifully controlled colors, cinematic anime lighting, polished background art."),
-    "3d": ("🧸 3D-мультфильм", "Polished stylized 3D animated movie look, appealing rounded shapes, expressive face, detailed materials, soft cinematic lighting, charming colorful composition."),
-    "cyberpunk": ("🌃 Киберпанк", "Cyberpunk science-fiction visual style, neon signs, rain reflections, atmospheric night lighting, rich but controlled cyan and magenta accents, intricate futuristic details."),
-    "minecraft": ("🟩 Minecraft", "Voxel art inspired by block-building games, recognizable cubic shapes, pixelated textures, playful blocky environment, clear composition and vivid but balanced colors."),
-    "cartoon": ("🎨 Мультфильм", "Professional 2D cartoon illustration, friendly expressive shapes, clean outlines, appealing characters, readable silhouettes, lively colors and polished background."),
-    "watercolor": ("🖌️ Акварель", "Traditional watercolor illustration on textured paper, delicate pigment blooms, elegant brushwork, soft edges, subtle paper grain, harmonious artistic palette."),
-    "cinematic": ("🎬 Кинематограф", "Cinematic composition, dramatic but natural lighting, atmospheric depth, carefully directed visual focus, professional color grading, high detail and film-still quality."),
+    "realism": (
+        "📸 Реализм",
+        "Photorealistic image, natural materials and skin texture, professional camera photography, balanced exposure, realistic shadows, crisp details, tasteful color grading.",
+    ),
+    "anime": (
+        "🌸 Аниме",
+        "High-quality Japanese anime illustration, expressive character design, clean line art, beautifully controlled colors, cinematic anime lighting, polished background art.",
+    ),
+    "3d": (
+        "🧸 3D-мультфильм",
+        "Polished stylized 3D animated movie look, appealing rounded shapes, expressive face, detailed materials, soft cinematic lighting, charming colorful composition.",
+    ),
+    "cyberpunk": (
+        "🌃 Киберпанк",
+        "Cyberpunk science-fiction visual style, neon signs, rain reflections, atmospheric night lighting, rich but controlled cyan and magenta accents, intricate futuristic details.",
+    ),
+    "minecraft": (
+        "🟩 Minecraft",
+        "Voxel art inspired by block-building games, recognizable cubic shapes, pixelated textures, playful blocky environment, clear composition and vivid but balanced colors.",
+    ),
+    "cartoon": (
+        "🎨 Мультфильм",
+        "Professional 2D cartoon illustration, friendly expressive shapes, clean outlines, appealing characters, readable silhouettes, lively colors and polished background.",
+    ),
+    "watercolor": (
+        "🖌️ Акварель",
+        "Traditional watercolor illustration on textured paper, delicate pigment blooms, elegant brushwork, soft edges, subtle paper grain, harmonious artistic palette.",
+    ),
+    "cinematic": (
+        "🎬 Кинематограф",
+        "Cinematic composition, dramatic but natural lighting, atmospheric depth, carefully directed visual focus, professional color grading, high detail and film-still quality.",
+    ),
 }
 
 TOOLS_KB = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="🛍️ Фото товара", callback_data="tool:product"), InlineKeyboardButton(text="😂 Мем", callback_data="tool:meme")],
-    [InlineKeyboardButton(text="📺 Обложка YouTube", callback_data="tool:youtube_cover"), InlineKeyboardButton(text="👕 Дизайн одежды", callback_data="tool:clothing")],
-    [InlineKeyboardButton(text="🪧 Постер", callback_data="tool:poster"), InlineKeyboardButton(text="🧑‍🎨 Персонаж", callback_data="tool:character")],
-    [InlineKeyboardButton(text="🧽 Улучшить фото", callback_data="tool:improve_wait_photo"), InlineKeyboardButton(text="🌄 Заменить фон", callback_data="tool:background_wait_photo")],
-    [InlineKeyboardButton(text="🧠 Улучшить промпт", callback_data="tool:improve_prompt"), InlineKeyboardButton(text="🌍 Перевести промпт", callback_data="tool:translate_prompt")],
-    [InlineKeyboardButton(text="🎬 Сценарий TikTok", callback_data="tool:tiktok_script"), InlineKeyboardButton(text="💼 Заказать дизайн", callback_data="tool:custom_order")],
-    [InlineKeyboardButton(text="💡 Каталог промптов", callback_data="tool:prompt_library"), InlineKeyboardButton(text="👥 Реферальная программа", callback_data="tool:referral")],
+    [
+        InlineKeyboardButton(text="🛍️ Фото товара", callback_data="tool:product"),
+        InlineKeyboardButton(text="😂 Мем", callback_data="tool:meme"),
+    ],
+    [
+        InlineKeyboardButton(text="📺 Обложка YouTube", callback_data="tool:youtube_cover"),
+        InlineKeyboardButton(text="👕 Дизайн одежды", callback_data="tool:clothing"),
+    ],
+    [
+        InlineKeyboardButton(text="🪧 Постер", callback_data="tool:poster"),
+        InlineKeyboardButton(text="🧑‍🎨 Персонаж", callback_data="tool:character"),
+    ],
+    [
+        InlineKeyboardButton(text="🧽 Улучшить фото", callback_data="tool:improve_wait_photo"),
+        InlineKeyboardButton(text="🌄 Заменить фон", callback_data="tool:background_wait_photo"),
+    ],
+    [
+        InlineKeyboardButton(text="🧠 Улучшить промпт", callback_data="tool:improve_prompt"),
+        InlineKeyboardButton(text="🌍 Перевести промпт", callback_data="tool:translate_prompt"),
+    ],
+    [
+        InlineKeyboardButton(text="🎬 Сценарий TikTok", callback_data="tool:tiktok_script"),
+        InlineKeyboardButton(text="💼 Заказать дизайн", callback_data="tool:custom_order"),
+    ],
+    [
+        InlineKeyboardButton(text="💡 Каталог промптов", callback_data="tool:prompt_library"),
+        InlineKeyboardButton(text="👥 Реферальная программа", callback_data="tool:referral"),
+    ],
 ])
 
 STYLE_KB = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="📸 Реализм", callback_data="style:realism"), InlineKeyboardButton(text="🌸 Аниме", callback_data="style:anime")],
-    [InlineKeyboardButton(text="🧸 3D-мультфильм", callback_data="style:3d"), InlineKeyboardButton(text="🌃 Киберпанк", callback_data="style:cyberpunk")],
-    [InlineKeyboardButton(text="🟩 Minecraft", callback_data="style:minecraft"), InlineKeyboardButton(text="🎨 Мультфильм", callback_data="style:cartoon")],
-    [InlineKeyboardButton(text="🖌️ Акварель", callback_data="style:watercolor"), InlineKeyboardButton(text="🎬 Кино", callback_data="style:cinematic")],
+    [
+        InlineKeyboardButton(text="📸 Реализм", callback_data="style:realism"),
+        InlineKeyboardButton(text="🌸 Аниме", callback_data="style:anime"),
+    ],
+    [
+        InlineKeyboardButton(text="🧸 3D-мультфильм", callback_data="style:3d"),
+        InlineKeyboardButton(text="🌃 Киберпанк", callback_data="style:cyberpunk"),
+    ],
+    [
+        InlineKeyboardButton(text="🟩 Minecraft", callback_data="style:minecraft"),
+        InlineKeyboardButton(text="🎨 Мультфильм", callback_data="style:cartoon"),
+    ],
+    [
+        InlineKeyboardButton(text="🖌️ Акварель", callback_data="style:watercolor"),
+        InlineKeyboardButton(text="🎬 Кино", callback_data="style:cinematic"),
+    ],
 ])
 
 PROMPT_LIBRARY: dict[str, tuple[str, str]] = {
-    "fantasy": ("🐉 Фэнтези", "An epic fantasy landscape with an ancient castle on a mountain, misty valleys, tiny glowing fireflies, richly textured stone, magical atmosphere, cinematic golden-hour light, intricate environment design."),
-    "product": ("🛍️ Реклама товара", "A premium commercial product photograph of a beautifully arranged modern product on a clean studio set, precise softbox lighting, elegant shadows, uncluttered background, realistic materials, luxury advertising art direction."),
-    "portrait": ("📸 Портрет", "A tasteful professional editorial portrait of an adult person, natural expression, beautiful soft key light, realistic skin texture, 85mm portrait lens look, subtle background blur, polished magazine photography."),
-    "space": ("🚀 Космос", "A breathtaking view of a futuristic space station above a blue planet, detailed spacecraft, stars and nebulae, cinematic wide composition, realistic light scattering, crisp science-fiction concept art."),
-    "food": ("🍓 Еда", "A delicious gourmet food editorial photograph, appetizing natural textures, delicate steam, carefully arranged ingredients, soft directional studio light, professional restaurant menu photography, rich realistic detail."),
-    "game": ("🎮 Игровая сцена", "A polished game concept-art scene with a memorable hero silhouette, dramatic environment, layered atmospheric perspective, detailed materials, readable composition, high-end game key art."),
+    "fantasy": (
+        "🐉 Фэнтези",
+        "An epic fantasy landscape with an ancient castle on a mountain, misty valleys, tiny glowing fireflies, richly textured stone, magical atmosphere, cinematic golden-hour light, intricate environment design.",
+    ),
+    "product": (
+        "🛍️ Реклама товара",
+        "A premium commercial product photograph of a beautifully arranged modern product on a clean studio set, precise softbox lighting, elegant shadows, uncluttered background, realistic materials, luxury advertising art direction.",
+    ),
+    "portrait": (
+        "📸 Портрет",
+        "A tasteful professional editorial portrait of an adult person, natural expression, beautiful soft key light, realistic skin texture, 85mm portrait lens look, subtle background blur, polished magazine photography.",
+    ),
+    "space": (
+        "🚀 Космос",
+        "A breathtaking view of a futuristic space station above a blue planet, detailed spacecraft, stars and nebulae, cinematic wide composition, realistic light scattering, crisp science-fiction concept art.",
+    ),
+    "food": (
+        "🍓 Еда",
+        "A delicious gourmet food editorial photograph, appetizing natural textures, delicate steam, carefully arranged ingredients, soft directional studio light, professional restaurant menu photography, rich realistic detail.",
+    ),
+    "game": (
+        "🎮 Игровая сцена",
+        "A polished game concept-art scene with a memorable hero silhouette, dramatic environment, layered atmospheric perspective, detailed materials, readable composition, high-end game key art.",
+    ),
 }
 
 PROMPT_LIBRARY_KB = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="🐉 Фэнтези", callback_data="promptlib:fantasy"), InlineKeyboardButton(text="🛍️ Товар", callback_data="promptlib:product")],
-    [InlineKeyboardButton(text="📸 Портрет", callback_data="promptlib:portrait"), InlineKeyboardButton(text="🚀 Космос", callback_data="promptlib:space")],
-    [InlineKeyboardButton(text="🍓 Еда", callback_data="promptlib:food"), InlineKeyboardButton(text="🎮 Игры", callback_data="promptlib:game")],
+    [
+        InlineKeyboardButton(text="🐉 Фэнтези", callback_data="promptlib:fantasy"),
+        InlineKeyboardButton(text="🛍️ Товар", callback_data="promptlib:product"),
+    ],
+    [
+        InlineKeyboardButton(text="📸 Портрет", callback_data="promptlib:portrait"),
+        InlineKeyboardButton(text="🚀 Космос", callback_data="promptlib:space"),
+    ],
+    [
+        InlineKeyboardButton(text="🍓 Еда", callback_data="promptlib:food"),
+        InlineKeyboardButton(text="🎮 Игры", callback_data="promptlib:game"),
+    ],
 ])
 
 CANCEL_KB = InlineKeyboardMarkup(
@@ -198,8 +282,14 @@ SHOP_KB = InlineKeyboardMarkup(
 
 RESULT_KB = InlineKeyboardMarkup(
     inline_keyboard=[
-        [InlineKeyboardButton(text="🎲 Ещё вариант", callback_data="variant"), InlineKeyboardButton(text="🧪 Сделать 4 варианта", callback_data="variants4")],
-        [InlineKeyboardButton(text="🔁 Новый запрос", callback_data="again"), InlineKeyboardButton(text="🕘 История", callback_data="history")],
+        [
+            InlineKeyboardButton(text="🎲 Ещё вариант", callback_data="variant"),
+            InlineKeyboardButton(text="🧪 Сделать 4 варианта", callback_data="variants4"),
+        ],
+        [
+            InlineKeyboardButton(text="🔁 Новый запрос", callback_data="again"),
+            InlineKeyboardButton(text="🕘 История", callback_data="history"),
+        ],
         [InlineKeyboardButton(text="⚠️ Сообщить о проблеме", callback_data="report")],
     ]
 )
@@ -314,6 +404,7 @@ def init_db() -> None:
                 PRIMARY KEY(user_id, day)
             )"""
         )
+
         db.execute(
             """CREATE TABLE IF NOT EXISTS referrals (
                 invited_user_id INTEGER PRIMARY KEY,
@@ -321,6 +412,7 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             )"""
         )
+
         db.execute(
             """CREATE TABLE IF NOT EXISTS generation_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -331,6 +423,7 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             )"""
         )
+
         db.execute(
             """CREATE TABLE IF NOT EXISTS promo_codes (
                 code TEXT PRIMARY KEY,
@@ -340,6 +433,7 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             )"""
         )
+
         db.execute(
             """CREATE TABLE IF NOT EXISTS promo_redemptions (
                 code TEXT NOT NULL,
@@ -353,10 +447,12 @@ def init_db() -> None:
             r[1]
             for r in db.execute("PRAGMA table_info(daily_usage)").fetchall()
         }
+
         if "free_used" not in columns:
             db.execute(
                 "ALTER TABLE daily_usage ADD COLUMN free_used INTEGER NOT NULL DEFAULT 0"
             )
+
         if "vip_used" not in columns:
             db.execute(
                 "ALTER TABLE daily_usage ADD COLUMN vip_used INTEGER NOT NULL DEFAULT 0"
@@ -369,8 +465,10 @@ def init_db() -> None:
 
         if "vip_previous" not in payment_columns:
             db.execute("ALTER TABLE payments ADD COLUMN vip_previous TEXT")
+
         if "vip_granted_until" not in payment_columns:
             db.execute("ALTER TABLE payments ADD COLUMN vip_granted_until TEXT")
+
         if "refunded" not in payment_columns:
             db.execute(
                 "ALTER TABLE payments ADD COLUMN refunded INTEGER NOT NULL DEFAULT 0"
@@ -620,59 +718,114 @@ def list_generation_history(user_id: int, limit: int = 5) -> list[sqlite3.Row]:
 
 def get_referral_count(user_id: int) -> int:
     with database() as db:
-        row = db.execute("SELECT COUNT(*) AS n FROM referrals WHERE referrer_user_id=?", (user_id,)).fetchone()
+        row = db.execute(
+            "SELECT COUNT(*) AS n FROM referrals WHERE referrer_user_id=?",
+            (user_id,),
+        ).fetchone()
         return int(row["n"] if row else 0)
 
 
 def available_generation_count(user_id: int, ceiling: int = 4) -> int:
     if is_admin(user_id):
         return ceiling
+
     row = get_user(user_id)
     if not row:
         return 0
+
     credits = max(0, int(row["credits"] or 0))
     today = day_key()
+
     with database() as db:
-        usage = db.execute("SELECT free_used, vip_used FROM daily_usage WHERE user_id=? AND day=?", (user_id, today)).fetchone()
+        usage = db.execute(
+            "SELECT free_used, vip_used FROM daily_usage WHERE user_id=? AND day=?",
+            (user_id, today),
+        ).fetchone()
+
     free_used = int(usage["free_used"]) if usage else 0
     vip_used = int(usage["vip_used"]) if usage else 0
+
     if vip_active(row["vip_until"]):
         vip_remaining = max(0, VIP_DAILY_LIMIT - vip_used)
         return min(ceiling, vip_remaining + credits)
+
     free_remaining = max(0, FREE_DAILY_LIMIT - free_used)
     return min(ceiling, free_remaining + credits)
 
 
-async def generate_variant_batch(message: Message, user_id: int, prompt: str, mode: str, count: int) -> None:
+async def generate_variant_batch(
+    message: Message,
+    user_id: int,
+    prompt: str,
+    mode: str,
+    count: int,
+) -> None:
     """Generate variants sequentially to avoid parallel Cloudflare calls per user."""
     completed = 0
+
     for index in range(count):
         try:
-            await message.answer(f"🎲 Вариант {index + 1} из {count}: запускаю генерацию…")
-            await begin_generation(message, prompt, mode, user_id_override=user_id)
+            await message.answer(
+                f"🎲 Вариант {index + 1} из {count}: запускаю генерацию…"
+            )
+            await begin_generation(
+                message,
+                prompt,
+                mode,
+                user_id_override=user_id,
+            )
             completed += 1
         except Exception:
-            log.exception("Variant batch failed user_id=%s index=%s", user_id, index)
-    log.info("Variant batch finished user_id=%s completed=%s requested=%s", user_id, completed, count)
+            log.exception(
+                "Variant batch failed user_id=%s index=%s",
+                user_id,
+                index,
+            )
+
+    log.info(
+        "Variant batch finished user_id=%s completed=%s requested=%s",
+        user_id,
+        completed,
+        count,
+    )
 
 
 def redeem_promo(user_id: int, code: str) -> tuple[bool, str]:
     normalized = code.strip().upper()
+
     if not normalized or len(normalized) > 32:
         return False, "Неверный код промоакции."
+
     with database() as db:
-        promo = db.execute("SELECT * FROM promo_codes WHERE code=?", (normalized,)).fetchone()
+        promo = db.execute(
+            "SELECT * FROM promo_codes WHERE code=?",
+            (normalized,),
+        ).fetchone()
+
         if not promo:
             return False, "Промокод не найден или уже отключён."
+
         if int(promo["uses"]) >= int(promo["max_uses"]):
             return False, "Лимит активаций этого промокода исчерпан."
+
         try:
-            db.execute("INSERT INTO promo_redemptions(code, user_id, created_at) VALUES (?, ?, ?)", (normalized, user_id, now_iso()))
+            db.execute(
+                "INSERT INTO promo_redemptions(code, user_id, created_at) VALUES (?, ?, ?)",
+                (normalized, user_id, now_iso()),
+            )
         except sqlite3.IntegrityError:
             return False, "Ты уже активировал этот промокод."
+
         credits = max(0, int(promo["credits"]))
-        db.execute("UPDATE users SET credits=credits+? WHERE user_id=?", (credits, user_id))
-        db.execute("UPDATE promo_codes SET uses=uses+1 WHERE code=?", (normalized,))
+        db.execute(
+            "UPDATE users SET credits=credits+? WHERE user_id=?",
+            (credits, user_id),
+        )
+        db.execute(
+            "UPDATE promo_codes SET uses=uses+1 WHERE code=?",
+            (normalized,),
+        )
+
         return True, f"Промокод активирован! Начислено {credits} кредитов 🎁"
 
 
@@ -693,16 +846,25 @@ async def translate_prompt_to_english(prompt: str) -> str:
         try:
             response = await http_client.get(
                 "https://translate.googleapis.com/translate_a/single",
-                params={"client": "gtx", "sl": "auto", "tl": "en", "dt": "t", "q": prompt},
+                params={
+                    "client": "gtx",
+                    "sl": "auto",
+                    "tl": "en",
+                    "dt": "t",
+                    "q": prompt,
+                },
                 timeout=18.0,
             )
             response.raise_for_status()
             data = response.json()
-            translated = "".join(str(part[0]) for part in data[0] if part and part[0])
+            translated = "".join(
+                str(part[0]) for part in data[0] if part and part[0]
+            )
             if translated.strip():
                 return translated.strip()
         except Exception as exc:
             log.warning("Prompt translation endpoint failed: %s", exc)
+
     return (
         "Переводчик временно недоступен. Исходное описание: "
         + " ".join(prompt.split())
@@ -712,6 +874,7 @@ async def translate_prompt_to_english(prompt: str) -> str:
 
 def make_tiktok_script(topic: str) -> str:
     idea = html.escape(topic[:500])
+
     return (
         "<b>🎬 Сценарий TikTok — 6 сцен по 10 секунд</b>\n"
         f"<b>Тема:</b> {idea}\n\n"
@@ -745,7 +908,12 @@ def make_tiktok_script(topic: str) -> str:
 
 def referral_help_text(user_id: int, bot_username: str) -> str:
     count = get_referral_count(user_id)
-    link = f"https://t.me/{bot_username}?start=ref_{user_id}" if bot_username else "Открой /start после получения username бота."
+    link = (
+        f"https://t.me/{bot_username}?start=ref_{user_id}"
+        if bot_username
+        else "Открой /start после получения username бота."
+    )
+
     return (
         "<b>👥 Реферальная программа</b>\n\n"
         "Пригласи друга своей ссылкой: когда новый пользователь впервые запустит бота по ней, "
@@ -773,7 +941,6 @@ def resize_reference_image(raw: bytes) -> bytes:
 
 def cloudflare_error_codes(response: httpx.Response) -> set[int]:
     """Extract Cloudflare error codes from nested JSON."""
-
     try:
         payload = response.json()
     except (ValueError, json.JSONDecodeError):
@@ -873,6 +1040,7 @@ def extract_image_response(response: httpx.Response) -> bytes:
     if content_type.startswith("image/"):
         if response.content:
             return response.content
+
         raise UserFacingError(
             "Cloudflare вернул пустое изображение. Попробуй ещё раз."
         )
@@ -936,30 +1104,41 @@ def _font_for_image(size: int):
         "C:/Windows/Fonts/arialbd.ttf",
         "C:/Windows/Fonts/impact.ttf",
     ]
+
     for candidate in candidates:
         try:
             return ImageFont.truetype(candidate, size=size)
         except (OSError, ValueError):
             continue
+
     try:
         return ImageFont.load_default(size=size)
     except TypeError:
         return ImageFont.load_default()
 
 
-def _wrap_overlay_text(text: str, draw: ImageDraw.ImageDraw, font: Any, max_width: int) -> list[str]:
+def _wrap_overlay_text(
+    text: str,
+    draw: ImageDraw.ImageDraw,
+    font: Any,
+    max_width: int,
+) -> list[str]:
     words = text.split()
     if not words:
         return []
+
     lines: list[str] = []
     current = words[0]
+
     for word in words[1:]:
         candidate = current + " " + word
+
         if draw.textbbox((0, 0), candidate, font=font, stroke_width=2)[2] <= max_width:
             current = candidate
         else:
             lines.append(current)
             current = word
+
     lines.append(current)
     return lines
 
@@ -968,12 +1147,15 @@ def apply_caption_overlay(image_bytes: bytes, prompt: str, mode: str) -> bytes:
     """Draw optional captions when the user separates text with a vertical bar."""
     if "|" not in prompt:
         return image_bytes
+
     parts = [part.strip() for part in prompt.split("|", 1)]
     if len(parts) != 2 or not parts[0] or not parts[1]:
         return image_bytes
+
     try:
         with Image.open(io.BytesIO(image_bytes)) as source:
             image = source.convert("RGB")
+
         draw = ImageDraw.Draw(image)
         width, height = image.size
         max_width = max(120, width - 56)
@@ -981,30 +1163,47 @@ def apply_caption_overlay(image_bytes: bytes, prompt: str, mode: str) -> bytes:
         def draw_caption(caption: str, y: int, area_height: int) -> None:
             font = _font_for_image(max(22, min(76, width // 10)))
             lines = _wrap_overlay_text(caption, draw, font, max_width)
-            while len(lines) * (font.size + 8) > area_height and getattr(font, "size", 26) > 22:
+
+            while (
+                len(lines) * (font.size + 8) > area_height
+                and getattr(font, "size", 26) > 22
+            ):
                 font = _font_for_image(max(22, font.size - 4))
                 lines = _wrap_overlay_text(caption, draw, font, max_width)
+
             line_height = max(24, getattr(font, "size", 26) + 8)
-            total_height = line_height * len(lines)
             current_y = y
+
             for line in lines:
                 box = draw.textbbox((0, 0), line, font=font, stroke_width=4)
                 text_width = box[2] - box[0]
                 x = max(12, (width - text_width) // 2)
-                draw.text((x, current_y), line, font=font, fill="white", stroke_width=4, stroke_fill="black")
+
+                draw.text(
+                    (x, current_y),
+                    line,
+                    font=font,
+                    fill="white",
+                    stroke_width=4,
+                    stroke_fill="black",
+                )
                 current_y += line_height
 
         if mode == "meme":
             draw_caption(parts[0], 18, max(80, height // 4))
             bottom_area = max(80, height // 4)
-            draw_caption(parts[1], max(16, height - bottom_area - 18), bottom_area)
+            draw_caption(
+                parts[1],
+                max(16, height - bottom_area - 18),
+                bottom_area,
+            )
         else:
-            # For thumbnails/posters use the first part as the headline; the second is scene guidance.
             draw_caption(parts[0], 20, max(90, height // 3))
 
         buffer = io.BytesIO()
         image.save(buffer, format="PNG", optimize=True)
         return buffer.getvalue()
+
     except Exception:
         log.exception("Could not draw requested caption overlay")
         return image_bytes
@@ -1052,13 +1251,10 @@ async def generate_image(
         )
 
     response: httpx.Response | None = None
-    # Retry only temporary server/capacity errors, never a safety-moderation rejection.
     max_attempts = 3
 
     try:
         for attempt in range(max_attempts):
-            # Use a different seed for each attempt to obtain a different sample.
-            # This does not disable or bypass Cloudflare's safety filter.
             attempt_parts = list(base_parts)
             attempt_parts.append(
                 (
@@ -1086,8 +1282,6 @@ async def generate_image(
                 else set()
             )
 
-            # Do not retry code 3030: it is a safety decision made by Cloudflare.
-            # Retrying with new seeds to get around that decision is intentionally disabled.
             if 3030 in codes:
                 break
 
@@ -1246,108 +1440,160 @@ def save_report(
         return int(cursor.lastrowid)
 
 
+# ============================================================
+# ОНОВЛЕНА АНІМАЦІЯ MARKETPHOTO AI
+# ============================================================
+
 def estimated_generation_progress(elapsed_seconds: float) -> int:
-    """A moving waiting-time estimate, not the model's internal progress."""
+    """
+    Приблизний індикатор очікування.
+    Це не реальний прогрес Cloudflare.
+    """
     elapsed = max(0.0, float(elapsed_seconds))
-    # A rough waiting estimate drives the filling bar; the numeric value is not displayed.
-    return min(92, max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0)))))
+    progress = 8 + 88 * (1 - math.exp(-elapsed / 58.0))
+    return min(94, max(8, int(progress)))
 
 
-def generation_progress_text(percent: int, frame_index: int, mode: str = "generate") -> str:
-    """Animated text-only progress screen with rotating clock emojis and a filling bar."""
-    percent = max(8, min(92, int(percent)))
+def generation_progress_text(
+    percent: int,
+    frame_index: int,
+    mode: str = "generate",
+) -> str:
+    """Годинник, рухома іскра, смужка та приблизний відсоток."""
 
-    # These emojis change on each Telegram message edit, creating a small moving clock.
-    clocks = ("🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚")
+    percent = max(8, min(94, int(percent)))
+    frame_index = max(0, int(frame_index))
+
+    clocks = (
+        "🕛", "🕐", "🕑", "🕒",
+        "🕓", "🕔", "🕕", "🕖",
+        "🕗", "🕘", "🕙", "🕚",
+    )
     clock = clocks[frame_index % len(clocks)]
 
-    phases = [
-        ("🚀", "ЗАПУСКАЮ МАСТЕРСКУЮ", "Подготавливаю идею и композицию"),
-        ("🧠", "СОБИРАЮ ОБРАЗ", "Персонажи и формы постепенно складываются вместе"),
-        ("🎨", "РАБОТАЮ С ЦВЕТОМ", "Подбираю свет, оттенки и атмосферу"),
-        ("🪄", "ДОБАВЛЯЮ ДЕТАЛИ", "Маленькие детали оживают на картинке"),
-        ("💎", "ШЛИФУЮ РЕЗУЛЬТАТ", "Остаются последние творческие штрихи"),
-        ("✨", "ПОЧТИ ГОТОВО", "Жду готовое изображение от сервиса"),
-    ]
-    phase_index = min(len(phases) - 1, max(0, (percent - 8) // 15))
-    phase_icon, headline, subtitle = phases[phase_index]
-
-    mode_names = {
-        "generate": "Свободная генерация",
-        "avatar": "Аватарка",
-        "wallpaper": "Обои на телефон",
-        "edit": "Редактирование фото",
-        "product": "Фото товара",
-        "meme": "Мем",
-        "youtube_cover": "Обложка YouTube",
-        "clothing": "Дизайн одежды",
-        "poster": "Постер",
-        "character": "Дизайн персонажа",
-        "preset": "Выбранный стиль",
-    }
-    mode_name = html.escape(mode_names.get(mode, "Создание изображения"))
-
-    # A progressive bar plus a sparkle that slides across the filled portion.
-    width = 14
-    filled = max(1, min(width - 1, round(percent / 100 * width)))
-    bar_slots = ["▫️"] * width
-    for slot in range(filled):
-        bar_slots[slot] = "🟦"
-    shine_pos = frame_index % filled
-    bar_slots[shine_pos] = "✨"
-    bar = "".join(bar_slots)
-
-    # A tiny sparkle trail also changes location every frame.
-    trails = (
-        "✦ · · · · ·",
-        "· ✧ · · · ·",
-        "· · ✦ · · ·",
-        "· · · ✧ · ·",
-        "· · · · ✦ ·",
-        "· · · · · ✧",
-    )
-    trail = trails[frame_index % len(trails)]
-    spinners = ("◜", "◝", "◞", "◟")
+    spinners = ("◴", "◷", "◶", "◵")
     spinner = spinners[frame_index % len(spinners)]
 
+    if percent < 20:
+        phase_icon = "🚀"
+        headline = "ЗАПУСКАЮ МАСТЕРСКУЮ"
+        subtitle = "Подготавливаю идею и композицию"
+    elif percent < 35:
+        phase_icon = "🧠"
+        headline = "СОБИРАЮ ОБРАЗ"
+        subtitle = "Формирую главные объекты и формы"
+    elif percent < 52:
+        phase_icon = "🎨"
+        headline = "РАБОТАЮ С ЦВЕТОМ"
+        subtitle = "Подбираю оттенки, свет и атмосферу"
+    elif percent < 70:
+        phase_icon = "🪄"
+        headline = "ДОБАВЛЯЮ ДЕТАЛИ"
+        subtitle = "Дорабатываю внешний вид изображения"
+    elif percent < 85:
+        phase_icon = "💎"
+        headline = "ШЛИФУЮ РЕЗУЛЬТАТ"
+        subtitle = "Ожидаю ответ сервиса генерации"
+    else:
+        phase_icon = "✨"
+        headline = "ОЖИДАЮ ИЗОБРАЖЕНИЕ"
+        subtitle = "Результат ещё обрабатывается"
+
+    mode_names = {
+        "generate": "🎨 Создание изображения",
+        "avatar": "👤 Аватарка",
+        "wallpaper": "📱 Обои на телефон",
+        "edit": "🪄 Редактирование фото",
+        "product": "🛍️ Фото товара",
+        "meme": "😂 Мем",
+        "youtube_cover": "📺 Обложка YouTube",
+        "clothing": "👕 Дизайн одежды",
+        "poster": "🪧 Постер",
+        "character": "🧑‍🎨 Дизайн персонажа",
+        "preset": "🎭 Выбранный стиль",
+    }
+
+    mode_name = html.escape(
+        mode_names.get(mode, "✨ Создание изображения")
+    )
+
+    bar_width = 12
+    filled = max(
+        1,
+        min(bar_width - 1, round(percent / 100 * bar_width)),
+    )
+
+    bar_parts = [
+        "🟦" if index < filled else "▫️"
+        for index in range(bar_width)
+    ]
+
+    # Іскра пересувається всередині заповненої частини.
+    bar_parts[(frame_index // 2) % filled] = "✨"
+    bar = " ".join(bar_parts)
+
+    trails = (
+        "✨ · · · · ·",
+        "· ✨ · · · ·",
+        "· · ✨ · · ·",
+        "· · · ✨ · ·",
+        "· · · · ✨ ·",
+        "· · · · · ✨",
+    )
+    trail = trails[frame_index % len(trails)]
+
+    decorations = ("✨", "💫", "🌟", "💫")
+    decoration = decorations[frame_index % len(decorations)]
+
     return (
-        "╭━━━━━━━━━━━━━━━━━━━━━━━━╮\n"
-        "       <b>✨ MARKETPHOTO AI</b>\n"
-        "╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        "╭━━━━━━━━━━━━━━━━━━━━━━╮\n"
+        "      <b>✨ MARKETPHOTO AI</b>\n"
+        "╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
         f"{clock} {phase_icon} <b>{headline}</b> {spinner}\n"
         f"<i>{html.escape(subtitle)}</i>\n\n"
         f"<code>{bar}</code>\n"
-        f"　　 {trail}\n\n"
+        f"<b>~{percent}%</b>  {decoration}\n"
+        f"<code>{trail}</code>\n\n"
         f"🎨 <b>Режим:</b> {mode_name}\n"
-        "<i>Создаю изображение — полоска заполняется, огоньки движутся…</i>"
+        "⏳ <i>Изображение создаётся…</i>"
     )
 
 
-async def animate_generation(status_message: Message, mode: str = "generate") -> None:
-    """Update the text animation until generation completes."""
+async def animate_generation(
+    status_message: Message,
+    mode: str = "generate",
+) -> None:
+    """Оновлює анімацію кожні дві секунди до завершення генерації."""
+
     started = time.monotonic()
-    frame_index = 1  # frame zero is shown by begin_generation before this task starts
+    frame_index = 1
 
     while True:
         elapsed = time.monotonic() - started
         percent = estimated_generation_progress(elapsed)
+
         try:
             await status_message.edit_text(
-                generation_progress_text(percent, frame_index, mode)
+                generation_progress_text(
+                    percent,
+                    frame_index,
+                    mode,
+                )
             )
         except TelegramAPIError as exc:
-            # Telegram sometimes rate-limits edits; keep the generation alive.
-            log.debug("Could not update generation animation: %s", exc)
+            # Помилка редагування повідомлення не зупиняє генерацію.
+            log.debug("Animation update failed: %s", exc)
         except Exception:
-            log.exception("Unexpected generation animation error")
+            log.exception("Unexpected animation error")
 
         frame_index += 1
-        await asyncio.sleep(2.2)
+        await asyncio.sleep(2.0)
+
 
 async def stop_generation_animation(
     animation_task: asyncio.Task[None] | None,
 ) -> None:
-    """Stop the animation cleanly."""
+    """Зупиняє анімацію та чекає завершення її завдання."""
     if animation_task is None:
         return
 
@@ -1445,19 +1691,59 @@ def build_generation_prompt(prompt: str, mode: str) -> str:
         )
 
     if mode == "product":
-        return "Create a premium e-commerce product photograph from this brief: " + prompt + ". Show the product clearly, accurate proportions, realistic materials, clean studio setup, softbox lighting, tasteful shadows, uncluttered background, commercial quality. Do not invent brand logos or tiny unreadable text."
+        return (
+            "Create a premium e-commerce product photograph from this brief: "
+            + prompt
+            + ". Show the product clearly, accurate proportions, realistic materials, "
+            "clean studio setup, softbox lighting, tasteful shadows, uncluttered "
+            "background, commercial quality. Do not invent brand logos or tiny unreadable text."
+        )
+
     if mode == "meme":
-        return "Create a funny, readable meme illustration based on this idea: " + prompt + ". Clear central joke, expressive but friendly character, strong visual hierarchy, simple background, leave clean space at top and bottom for caption text. Do not render gibberish lettering; reserve blank caption areas."
+        return (
+            "Create a funny, readable meme illustration based on this idea: "
+            + prompt
+            + ". Clear central joke, expressive but friendly character, strong visual "
+            "hierarchy, simple background, leave clean space at top and bottom for "
+            "caption text. Do not render gibberish lettering; reserve blank caption areas."
+        )
+
     if mode == "youtube_cover":
-        return "Create a compelling YouTube thumbnail based on this topic: " + prompt + ". Landscape 16:9 composition, one dominant visual focal point, bold contrast, expressive subject, readable negative space for a title to be added later, crisp professional creator-style art direction. Avoid tiny text and watermarks."
+        return (
+            "Create a compelling YouTube thumbnail based on this topic: "
+            + prompt
+            + ". Landscape 16:9 composition, one dominant visual focal point, bold "
+            "contrast, expressive subject, readable negative space for a title to be "
+            "added later, crisp professional creator-style art direction. Avoid tiny text and watermarks."
+        )
+
     if mode == "clothing":
-        return "Create an original fashion design concept for clothing based on: " + prompt + ". Show the garment clearly on a neutral mannequin or clean flat-lay, detailed fabric and seams, cohesive color palette, production-inspired design presentation, no existing brand logos."
+        return (
+            "Create an original fashion design concept for clothing based on: "
+            + prompt
+            + ". Show the garment clearly on a neutral mannequin or clean flat-lay, "
+            "detailed fabric and seams, cohesive color palette, production-inspired "
+            "design presentation, no existing brand logos."
+        )
+
     if mode == "poster":
-        return "Create a polished poster design concept for: " + prompt + ". Strong central artwork, clear visual hierarchy, elegant negative space reserved for title and date, professional typography-friendly layout, balanced colors, print-poster quality. Keep any generated lettering minimal and readable."
+        return (
+            "Create a polished poster design concept for: "
+            + prompt
+            + ". Strong central artwork, clear visual hierarchy, elegant negative "
+            "space reserved for title and date, professional typography-friendly layout, "
+            "balanced colors, print-poster quality. Keep any generated lettering minimal and readable."
+        )
+
     if mode == "character":
-        return "Design an original fictional character based on: " + prompt + ". Show a full-body character sheet, front-facing pose, expressive face, distinctive but coherent clothing, clear silhouette, consistent materials and colors, simple neutral background, professional animation concept art."
-    if mode == "wallpaper":
-        return "Create a vertical smartphone wallpaper, 9:16 composition, elegant design, visually rich background, leave clean negative space near the top for phone clock and icons. User request: " + prompt
+        return (
+            "Design an original fictional character based on: "
+            + prompt
+            + ". Show a full-body character sheet, front-facing pose, expressive face, "
+            "distinctive but coherent clothing, clear silhouette, consistent materials "
+            "and colors, simple neutral background, professional animation concept art."
+        )
+
     if mode == "preset":
         return prompt
 
@@ -1519,23 +1805,10 @@ async def begin_generation(
     try:
         reservation = reserve_generation(user_id)
 
-                status_message = await message.answer(
+        # Анімація запускається один раз і оновлює це повідомлення.
+        status_message = await message.answer(
             generation_progress_text(8, 0, mode)
         )
-
-        animation_task = asyncio.create_task(
-            animate_generation(status_message, mode)
-        )
-
-        if bot:
-            await bot.send_chat_action(
-                message.chat.id,
-                ChatAction.UPLOAD_PHOTO,
-            )
-
-animation_task = asyncio.create_task(
-    animate_generation(status_message, mode)
-)
 
         animation_task = asyncio.create_task(
             animate_generation(status_message, mode)
@@ -1553,6 +1826,7 @@ animation_task = asyncio.create_task(
             height,
             reference,
         )
+
         if mode in {"meme", "youtube_cover", "poster"}:
             image_bytes = apply_caption_overlay(image_bytes, prompt, mode)
 
@@ -1567,12 +1841,16 @@ animation_task = asyncio.create_task(
             caption="✨ <b>Готово!</b> Создано в MarketPhoto AI.",
             reply_markup=RESULT_KB,
         )
+
         try:
             file_id = sent_image.photo[-1].file_id if sent_image.photo else ""
             if file_id:
                 save_generation_history(user_id, prompt, mode, file_id)
         except Exception:
-            log.exception("Could not save generation history for user_id=%s", user_id)
+            log.exception(
+                "Could not save generation history for user_id=%s",
+                user_id,
+            )
 
         if status_message:
             try:
@@ -1718,26 +1996,47 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
         existing = get_user(user.id)
         ensure_user(user)
         args = (command.args or "").strip()
+
         if existing is None and args.startswith("ref_"):
             try:
                 referrer_id = int(args[4:])
             except ValueError:
                 referrer_id = 0
+
             if referrer_id > 0 and referrer_id != user.id:
                 with database() as db:
-                    referrer = db.execute("SELECT user_id FROM users WHERE user_id=?", (referrer_id,)).fetchone()
+                    referrer = db.execute(
+                        "SELECT user_id FROM users WHERE user_id=?",
+                        (referrer_id,),
+                    ).fetchone()
+
                     if referrer:
                         cursor = db.execute(
                             "INSERT OR IGNORE INTO referrals(invited_user_id, referrer_user_id, created_at) VALUES (?, ?, ?)",
                             (user.id, referrer_id, now_iso()),
                         )
+
                         if cursor.rowcount == 1:
-                            db.execute("UPDATE users SET credits=credits+3 WHERE user_id=?", (referrer_id,))
-                            db.execute("UPDATE users SET credits=credits+2 WHERE user_id=?", (user.id,))
+                            db.execute(
+                                "UPDATE users SET credits=credits+3 WHERE user_id=?",
+                                (referrer_id,),
+                            )
+                            db.execute(
+                                "UPDATE users SET credits=credits+2 WHERE user_id=?",
+                                (user.id,),
+                            )
+
                             try:
-                                await bot.send_message(referrer_id, "🎉 Друг пришёл по твоей ссылке! Тебе начислено 3 кредита, ему — 2.")
+                                await bot.send_message(
+                                    referrer_id,
+                                    "🎉 Друг пришёл по твоей ссылке! Тебе начислено 3 кредита, ему — 2.",
+                                )
                             except Exception:
-                                log.debug("Could not notify referrer %s", referrer_id)
+                                log.debug(
+                                    "Could not notify referrer %s",
+                                    referrer_id,
+                                )
+
         await message.answer(
             "<b>✨ Добро пожаловать в MarketPhoto AI!</b>\n\n"
             "Создавай изображения, аватарки, обложки, мемы, фото товаров, постеры и дизайн одежды. "
@@ -1747,6 +2046,7 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             "Выбери функцию в меню ниже.",
             reply_markup=MAIN_MENU,
         )
+
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message) -> None:
@@ -1799,54 +2099,92 @@ async def cmd_buy(message: Message) -> None:
 async def cmd_bonus(message: Message) -> None:
     if not message.from_user:
         return
+
     ensure_user(message.from_user)
+
     if claim_daily_bonus(message.from_user.id):
-        await message.answer("🎁 <b>Ежедневный бонус получен!</b>\nНа баланс начислен 1 кредит. Возвращайся завтра за следующим.", reply_markup=MAIN_MENU)
+        await message.answer(
+            "🎁 <b>Ежедневный бонус получен!</b>\n"
+            "На баланс начислен 1 кредит. Возвращайся завтра за следующим.",
+            reply_markup=MAIN_MENU,
+        )
     else:
-        await message.answer("🎁 Сегодня ты уже забрал бонус. Приходи завтра!", reply_markup=MAIN_MENU)
+        await message.answer(
+            "🎁 Сегодня ты уже забрал бонус. Приходи завтра!",
+            reply_markup=MAIN_MENU,
+        )
 
 
 @dp.message(Command("history"))
 async def cmd_history(message: Message) -> None:
     if not message.from_user:
         return
+
     rows = list_generation_history(message.from_user.id, 5)
+
     if not rows:
-        await message.answer("🕘 История пока пустая. Создай первое изображение!", reply_markup=MAIN_MENU)
+        await message.answer(
+            "🕘 История пока пустая. Создай первое изображение!",
+            reply_markup=MAIN_MENU,
+        )
         return
+
     buttons = []
     lines = ["<b>🕘 Последние изображения</b>"]
+
     for row in rows:
         created = html.escape(str(row["created_at"])[:16].replace("T", " "))
         title = html.escape(str(row["prompt"])[:38])
         lines.append(f"• {created} — {title}")
-        buttons.append([InlineKeyboardButton(text=f"🖼️ {title[:32]}", callback_data=f"history:{int(row['id'])}")])
-    await message.answer("\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"🖼️ {title[:32]}",
+                callback_data=f"history:{int(row['id'])}",
+            )
+        ])
+
+    await message.answer(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
 
 
 @dp.message(Command("referral"))
 async def cmd_referral(message: Message) -> None:
     if not message.from_user:
         return
+
     username = ""
     if bot:
         try:
             username = (await bot.get_me()).username or ""
         except Exception:
             log.exception("Unable to get bot username")
-    await message.answer(referral_help_text(message.from_user.id, username), reply_markup=MAIN_MENU)
+
+    await message.answer(
+        referral_help_text(message.from_user.id, username),
+        reply_markup=MAIN_MENU,
+    )
 
 
 @dp.message(Command("promo"))
 async def cmd_promo(message: Message, command: CommandObject) -> None:
     if not message.from_user:
         return
+
     code = (command.args or "").strip()
     if not code:
-        await message.answer("Введи промокод так: <code>/promo MARKET10</code>")
+        await message.answer(
+            "Введи промокод так: <code>/promo MARKET10</code>"
+        )
         return
+
     ok, result = redeem_promo(message.from_user.id, code)
-    await message.answer(("✅ " if ok else "❌ ") + html.escape(result), reply_markup=MAIN_MENU)
+
+    await message.answer(
+        ("✅ " if ok else "❌ ") + html.escape(result),
+        reply_markup=MAIN_MENU,
+    )
 
 
 @dp.message(Command("promocode"))
@@ -1854,27 +2192,43 @@ async def cmd_create_promo(message: Message, command: CommandObject) -> None:
     if not message.from_user or not is_admin(message.from_user.id):
         await message.answer("Команда доступна только администратору.")
         return
+
     parts = (command.args or "").split()
     if len(parts) not in (2, 3):
-        await message.answer("Формат: <code>/promocode CODE КРЕДИТЫ [ЛИМИТ]</code>")
+        await message.answer(
+            "Формат: <code>/promocode CODE КРЕДИТЫ [ЛИМИТ]</code>"
+        )
         return
+
     code = parts[0].upper()[:32]
+
     try:
         credits = int(parts[1])
         max_uses = int(parts[2]) if len(parts) == 3 else 100
     except ValueError:
         await message.answer("Кредиты и лимит должны быть целыми числами.")
         return
+
     if credits < 1 or credits > 10000 or max_uses < 1 or max_uses > 100000:
-        await message.answer("Кредиты: 1–10000, лимит активаций: 1–100000.")
+        await message.answer(
+            "Кредиты: 1–10000, лимит активаций: 1–100000."
+        )
         return
+
     with database() as db:
         try:
-            db.execute("INSERT INTO promo_codes(code, credits, max_uses, created_at) VALUES (?, ?, ?, ?)", (code, credits, max_uses, now_iso()))
+            db.execute(
+                "INSERT INTO promo_codes(code, credits, max_uses, created_at) VALUES (?, ?, ?, ?)",
+                (code, credits, max_uses, now_iso()),
+            )
         except sqlite3.IntegrityError:
             await message.answer("Такой промокод уже существует.")
             return
-    await message.answer(f"✅ Промокод <code>{html.escape(code)}</code> создан: {credits} кредитов, до {max_uses} активаций.")
+
+    await message.answer(
+        f"✅ Промокод <code>{html.escape(code)}</code> создан: "
+        f"{credits} кредитов, до {max_uses} активаций."
+    )
 
 
 @dp.message(Command("terms"))
@@ -2390,51 +2744,100 @@ async def successful_payment(message: Message) -> None:
 async def callback_variant(callback: CallbackQuery) -> None:
     uid = callback.from_user.id
     row = get_last_generation(uid)
+
     if not row or not callback.message:
         await callback.answer("Сначала создай изображение", show_alert=True)
         return
+
     if row["mode"] == "edit":
-        await callback.answer("Для ещё одного варианта редактирования отправь исходное фото заново.", show_alert=True)
+        await callback.answer(
+            "Для ещё одного варианта редактирования отправь исходное фото заново.",
+            show_alert=True,
+        )
         return
+
     await callback.answer("Создаю ещё один вариант…")
-    asyncio.create_task(begin_generation(callback.message, str(row["prompt"]), str(row["mode"]), user_id_override=uid))
+    asyncio.create_task(
+        begin_generation(
+            callback.message,
+            str(row["prompt"]),
+            str(row["mode"]),
+            user_id_override=uid,
+        )
+    )
 
 
 @dp.callback_query(F.data == "variants4")
 async def callback_variants4(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
     row = get_last_generation(user_id)
+
     if not row or not callback.message:
         await callback.answer("Сначала создай изображение", show_alert=True)
         return
+
     if row["mode"] == "edit":
-        await callback.answer("Для вариантов редактирования нужно снова отправить исходное фото.", show_alert=True)
+        await callback.answer(
+            "Для вариантов редактирования нужно снова отправить исходное фото.",
+            show_alert=True,
+        )
         return
+
     count = available_generation_count(user_id, 4)
+
     if count <= 0:
-        await callback.answer("Нет доступных генераций. Получи бонус или пополни баланс.", show_alert=True)
+        await callback.answer(
+            "Нет доступных генераций. Получи бонус или пополни баланс.",
+            show_alert=True,
+        )
         return
-    await callback.answer(f"Готовлю {count} вариант(а). Каждый вариант расходует одну генерацию.")
-    asyncio.create_task(generate_variant_batch(callback.message, user_id, str(row["prompt"]), str(row["mode"]), count))
+
+    await callback.answer(
+        f"Готовлю {count} вариант(а). Каждый вариант расходует одну генерацию."
+    )
+
+    asyncio.create_task(
+        generate_variant_batch(
+            callback.message,
+            user_id,
+            str(row["prompt"]),
+            str(row["mode"]),
+            count,
+        )
+    )
 
 
 @dp.callback_query(F.data == "history")
 async def callback_history(callback: CallbackQuery) -> None:
     await callback.answer()
+
     if not callback.message:
         return
+
     rows = list_generation_history(callback.from_user.id, 5)
+
     if not rows:
         await callback.message.answer("История пока пустая.")
         return
+
     buttons = []
     lines = ["<b>🕘 Последние изображения</b>"]
+
     for row in rows:
         title = html.escape(str(row["prompt"])[:36])
         created = html.escape(str(row["created_at"])[:16].replace("T", " "))
         lines.append(f"• {created} — {title}")
-        buttons.append([InlineKeyboardButton(text=f"🖼️ {title[:30]}", callback_data=f"history:{int(row['id'])}")])
-    await callback.message.answer("\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"🖼️ {title[:30]}",
+                callback_data=f"history:{int(row['id'])}",
+            )
+        ])
+
+    await callback.message.answer(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
 
 
 @dp.callback_query(F.data.startswith("history:"))
@@ -2442,94 +2845,202 @@ async def callback_history_item(callback: CallbackQuery) -> None:
     if not callback.message or bot is None:
         await callback.answer("Не удалось открыть историю", show_alert=True)
         return
+
     try:
         item_id = int((callback.data or "").split(":", 1)[1])
     except ValueError:
         await callback.answer("Неверный элемент истории", show_alert=True)
         return
+
     with database() as db:
-        row = db.execute("SELECT * FROM generation_history WHERE id=? AND user_id=?", (item_id, callback.from_user.id)).fetchone()
+        row = db.execute(
+            "SELECT * FROM generation_history WHERE id=? AND user_id=?",
+            (item_id, callback.from_user.id),
+        ).fetchone()
+
     if not row:
         await callback.answer("Элемент не найден", show_alert=True)
         return
+
     await callback.answer()
-    await bot.send_photo(callback.message.chat.id, photo=str(row["file_id"]), caption="🕘 <b>Из истории MarketPhoto AI</b>\n" + html.escape(str(row["prompt"])[:700]), reply_markup=RESULT_KB)
+
+    await bot.send_photo(
+        callback.message.chat.id,
+        photo=str(row["file_id"]),
+        caption="🕘 <b>Из истории MarketPhoto AI</b>\n"
+        + html.escape(str(row["prompt"])[:700]),
+        reply_markup=RESULT_KB,
+    )
 
 
 @dp.callback_query(F.data == "use_enhanced")
 async def callback_use_enhanced(callback: CallbackQuery) -> None:
     prompt = last_enhanced_prompts.get(callback.from_user.id)
+
     if not prompt or not callback.message:
         await callback.answer("Сначала улучши промпт", show_alert=True)
         return
+
     await callback.answer("Запускаю генерацию…")
     last_enhanced_prompts.pop(callback.from_user.id, None)
-    await begin_generation(callback.message, prompt, "generate", user_id_override=callback.from_user.id)
+
+    await begin_generation(
+        callback.message,
+        prompt,
+        "generate",
+        user_id_override=callback.from_user.id,
+    )
 
 
 @dp.callback_query(F.data.startswith("style:"))
 async def callback_style(callback: CallbackQuery) -> None:
     key = (callback.data or "").split(":", 1)[1]
     style = STYLE_PRESETS.get(key)
+
     if not style:
         await callback.answer("Стиль не найден", show_alert=True)
         return
-    user_flows[callback.from_user.id] = {"mode": "style_input", "style_key": key}
+
+    user_flows[callback.from_user.id] = {
+        "mode": "style_input",
+        "style_key": key,
+    }
+
     await callback.answer()
+
     if callback.message:
-        await callback.message.answer(f"Выбран стиль: <b>{html.escape(style[0])}</b>\nТеперь напиши, что нужно изобразить.", reply_markup=CANCEL_KB)
+        await callback.message.answer(
+            f"Выбран стиль: <b>{html.escape(style[0])}</b>\n"
+            "Теперь напиши, что нужно изобразить.",
+            reply_markup=CANCEL_KB,
+        )
 
 
 @dp.callback_query(F.data.startswith("tool:"))
 async def callback_tool(callback: CallbackQuery) -> None:
     key = (callback.data or "").split(":", 1)[1]
     await callback.answer()
+
     if not callback.message:
         return
+
     if key == "prompt_library":
-        await callback.message.answer("<b>💡 Каталог готовых промптов</b>\nВыбери шаблон — бот создаст изображение по готовому описанию.", reply_markup=PROMPT_LIBRARY_KB)
+        await callback.message.answer(
+            "<b>💡 Каталог готовых промптов</b>\n"
+            "Выбери шаблон — бот создаст изображение по готовому описанию.",
+            reply_markup=PROMPT_LIBRARY_KB,
+        )
         return
+
     if key == "referral":
         username = ""
+
         if bot:
             try:
                 username = (await bot.get_me()).username or ""
             except Exception:
                 pass
-        await callback.message.answer(referral_help_text(callback.from_user.id, username), reply_markup=MAIN_MENU)
+
+        await callback.message.answer(
+            referral_help_text(callback.from_user.id, username),
+            reply_markup=MAIN_MENU,
+        )
         return
+
     if key == "custom_order":
         user_flows[callback.from_user.id] = {"mode": "custom_order"}
-        await callback.message.answer("💼 Опиши, какой дизайн нужен, где он будет использоваться и желаемый срок. Я передам заявку администратору. Оплату и сроки согласуете отдельно.", reply_markup=CANCEL_KB)
+
+        await callback.message.answer(
+            "💼 Опиши, какой дизайн нужен, где он будет использоваться "
+            "и желаемый срок. Я передам заявку администратору. "
+            "Оплату и сроки согласуете отдельно.",
+            reply_markup=CANCEL_KB,
+        )
         return
+
     if key == "improve_wait_photo":
-        user_flows[callback.from_user.id] = {"mode": "improve_wait_photo", "edit_task": "improve"}
-        await callback.message.answer("🧽 Отправь фото, которое нужно улучшить. Затем напиши пожелания.", reply_markup=CANCEL_KB)
+        user_flows[callback.from_user.id] = {
+            "mode": "improve_wait_photo",
+            "edit_task": "improve",
+        }
+
+        await callback.message.answer(
+            "🧽 Отправь фото, которое нужно улучшить. Затем напиши пожелания.",
+            reply_markup=CANCEL_KB,
+        )
         return
+
     if key == "background_wait_photo":
-        user_flows[callback.from_user.id] = {"mode": "background_wait_photo", "edit_task": "background"}
-        await callback.message.answer("🌄 Отправь фото, затем опиши желаемый фон. Я попробую сохранить главный объект.", reply_markup=CANCEL_KB)
+        user_flows[callback.from_user.id] = {
+            "mode": "background_wait_photo",
+            "edit_task": "background",
+        }
+
+        await callback.message.answer(
+            "🌄 Отправь фото, затем опиши желаемый фон. "
+            "Я попробую сохранить главный объект.",
+            reply_markup=CANCEL_KB,
+        )
         return
+
     if key in {"improve_prompt", "translate_prompt", "tiktok_script"}:
         user_flows[callback.from_user.id] = {"mode": key}
+
         descriptions = {
-            "improve_prompt": "🧠 Отправь короткий промпт — улучшу его и дам кнопку для генерации.",
-            "translate_prompt": "🌍 Отправь описание на украинском или русском — переведу его на английский для модели.",
-            "tiktok_script": "🎬 Опиши идею видео. Составлю сценарий из 6 сцен по 10 секунд с русскими репликами и промптами.",
+            "improve_prompt": (
+                "🧠 Отправь короткий промпт — улучшу его и дам кнопку для генерации."
+            ),
+            "translate_prompt": (
+                "🌍 Отправь описание на украинском или русском — переведу его на английский для модели."
+            ),
+            "tiktok_script": (
+                "🎬 Опиши идею видео. Составлю сценарий из 6 сцен по 10 секунд "
+                "с русскими репликами и промптами."
+            ),
         }
-        await callback.message.answer(descriptions[key], reply_markup=CANCEL_KB)
+
+        await callback.message.answer(
+            descriptions[key],
+            reply_markup=CANCEL_KB,
+        )
         return
-    if key in {"product", "meme", "youtube_cover", "clothing", "poster", "character"}:
+
+    if key in {
+        "product",
+        "meme",
+        "youtube_cover",
+        "clothing",
+        "poster",
+        "character",
+    }:
         user_flows[callback.from_user.id] = {"mode": key}
+
         descriptions = {
-            "product": "🛍️ Опиши товар и рекламный стиль. Сделаю коммерческое изображение товара.",
-            "meme": "😂 Опиши мем. Чтобы добавить надписи, напиши: ВЕРХНЯЯ НАДПИСЬ | НИЖНЯЯ НАДПИСЬ.",
-            "youtube_cover": "📺 Для заголовка на обложке напиши: ЗАГОЛОВОК | описание картинки.",
-            "clothing": "👕 Опиши одежду, фасон, ткань и цвета для оригинального дизайна.",
-            "poster": "🪧 Для заголовка постера напиши: ЗАГОЛОВОК | описание дизайна.",
-            "character": "🧑‍🎨 Опиши оригинального персонажа: внешний вид, одежду, характер и стиль.",
+            "product": (
+                "🛍️ Опиши товар и рекламный стиль. Сделаю коммерческое изображение товара."
+            ),
+            "meme": (
+                "😂 Опиши мем. Чтобы добавить надписи, напиши: "
+                "ВЕРХНЯЯ НАДПИСЬ | НИЖНЯЯ НАДПИСЬ."
+            ),
+            "youtube_cover": (
+                "📺 Для заголовка на обложке напиши: ЗАГОЛОВОК | описание картинки."
+            ),
+            "clothing": (
+                "👕 Опиши одежду, фасон, ткань и цвета для оригинального дизайна."
+            ),
+            "poster": (
+                "🪧 Для заголовка постера напиши: ЗАГОЛОВОК | описание дизайна."
+            ),
+            "character": (
+                "🧑‍🎨 Опиши оригинального персонажа: внешний вид, одежду, характер и стиль."
+            ),
         }
-        await callback.message.answer(descriptions[key], reply_markup=CANCEL_KB)
+
+        await callback.message.answer(
+            descriptions[key],
+            reply_markup=CANCEL_KB,
+        )
         return
 
 
@@ -2537,11 +3048,21 @@ async def callback_tool(callback: CallbackQuery) -> None:
 async def callback_prompt_library(callback: CallbackQuery) -> None:
     key = (callback.data or "").split(":", 1)[1]
     entry = PROMPT_LIBRARY.get(key)
+
     if not entry or not callback.message:
         await callback.answer("Шаблон не найден", show_alert=True)
         return
+
     await callback.answer("Готовлю изображение по шаблону…")
-    asyncio.create_task(begin_generation(callback.message, entry[1], "generate", user_id_override=callback.from_user.id))
+
+    asyncio.create_task(
+        begin_generation(
+            callback.message,
+            entry[1],
+            "generate",
+            user_id_override=callback.from_user.id,
+        )
+    )
 
 
 @dp.callback_query(F.data == "cancel")
@@ -2611,41 +3132,72 @@ async def callback_buy(callback: CallbackQuery) -> None:
 
 @dp.message(F.text == "🎭 Стили AI")
 async def menu_styles(message: Message) -> None:
-    await message.answer("<b>🎭 Выбери стиль изображения</b>\nПосле выбора напиши тему — я объединю её со стилем.", reply_markup=STYLE_KB)
+    await message.answer(
+        "<b>🎭 Выбери стиль изображения</b>\n"
+        "После выбора напиши тему — я объединю её со стилем.",
+        reply_markup=STYLE_KB,
+    )
 
 
 @dp.message(F.text == "🧰 Другие функции")
 async def menu_tools(message: Message) -> None:
-    await message.answer("<b>🧰 Инструменты MarketPhoto AI</b>\nВыбери нужную функцию:", reply_markup=TOOLS_KB)
+    await message.answer(
+        "<b>🧰 Инструменты MarketPhoto AI</b>\nВыбери нужную функцию:",
+        reply_markup=TOOLS_KB,
+    )
 
 
 @dp.message(F.text == "🎁 Бонус дня")
 async def menu_daily_bonus(message: Message) -> None:
     if not message.from_user:
         return
+
     ensure_user(message.from_user)
+
     if claim_daily_bonus(message.from_user.id):
-        await message.answer("🎁 <b>Бонус получен!</b> На баланс начислен 1 кредит. Возвращайся завтра.", reply_markup=MAIN_MENU)
+        await message.answer(
+            "🎁 <b>Бонус получен!</b> На баланс начислен 1 кредит. Возвращайся завтра.",
+            reply_markup=MAIN_MENU,
+        )
     else:
-        await message.answer("🎁 Сегодня бонус уже получен. Новый бонус будет доступен завтра.", reply_markup=MAIN_MENU)
+        await message.answer(
+            "🎁 Сегодня бонус уже получен. Новый бонус будет доступен завтра.",
+            reply_markup=MAIN_MENU,
+        )
 
 
 @dp.message(F.text == "🕘 История")
 async def menu_history(message: Message) -> None:
     if not message.from_user:
         return
+
     rows = list_generation_history(message.from_user.id, 5)
+
     if not rows:
-        await message.answer("История пока пустая. Создай первое изображение!", reply_markup=MAIN_MENU)
+        await message.answer(
+            "История пока пустая. Создай первое изображение!",
+            reply_markup=MAIN_MENU,
+        )
         return
+
     buttons = []
     lines = ["<b>🕘 Последние изображения</b>"]
+
     for row in rows:
         title = html.escape(str(row["prompt"])[:36])
         created = html.escape(str(row["created_at"])[:16].replace("T", " "))
         lines.append(f"• {created} — {title}")
-        buttons.append([InlineKeyboardButton(text=f"🖼️ {title[:30]}", callback_data=f"history:{int(row['id'])}")])
-    await message.answer("\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"🖼️ {title[:30]}",
+                callback_data=f"history:{int(row['id'])}",
+            )
+        ])
+
+    await message.answer(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
 
 
 @dp.message(F.text == "🎨 Создать изображение")
@@ -2730,12 +3282,18 @@ async def handle_incoming_image(message: Message) -> None:
 
     flow = user_flows.get(message.from_user.id, {})
 
-    if flow.get("mode") not in {"edit_wait_photo", "improve_wait_photo", "background_wait_photo"}:
+    if flow.get("mode") not in {
+        "edit_wait_photo",
+        "improve_wait_photo",
+        "background_wait_photo",
+    }:
         await message.answer(
-            "Сначала выбери в меню «Редактировать фото», «Улучшить фото» или «Заменить фон», а затем отправь изображение.",
+            "Сначала выбери в меню «Редактировать фото», «Улучшить фото» "
+            "или «Заменить фон», а затем отправь изображение.",
             reply_markup=MAIN_MENU,
         )
         return
+
     edit_task = flow.get("edit_task", "edit")
 
     try:
@@ -2754,9 +3312,17 @@ async def handle_incoming_image(message: Message) -> None:
     }
 
     instruction = {
-        "improve": "Фото получено ✅ Напиши, что улучшить (например, резкость, свет, цвета).",
-        "background": "Фото получено ✅ Опиши новый фон (например, студия, пляж, город).",
-    }.get(str(edit_task), "Фото получено ✅ Теперь напиши, что изменить.")
+        "improve": (
+            "Фото получено ✅ Напиши, что улучшить (например, резкость, свет, цвета)."
+        ),
+        "background": (
+            "Фото получено ✅ Опиши новый фон (например, студия, пляж, город)."
+        ),
+    }.get(
+        str(edit_task),
+        "Фото получено ✅ Теперь напиши, что изменить.",
+    )
+
     await message.answer(
         instruction,
         reply_markup=CANCEL_KB,
@@ -2785,7 +3351,11 @@ async def handle_text_flow(message: Message) -> None:
     text = message.text.strip()
 
     if mode in {"support", "report", "custom_order"}:
-        kind = "custom_order" if mode == "custom_order" else ("support" if mode == "support" else "generation_issue")
+        kind = (
+            "custom_order"
+            if mode == "custom_order"
+            else ("support" if mode == "support" else "generation_issue")
+        )
         user_flows.pop(user_id, None)
 
         report_id = save_report(
@@ -2810,8 +3380,16 @@ async def handle_text_flow(message: Message) -> None:
             f"Ответ: <code>/reply {user_id} текст</code>"
         )
 
-        user_message = "✅ Заявка передана администратору. Он свяжется с тобой, если сможет выполнить заказ." if kind == "custom_order" else "✅ Сообщение передано. Спасибо!"
-        await message.answer(user_message, reply_markup=MAIN_MENU)
+        user_message = (
+            "✅ Заявка передана администратору. Он свяжется с тобой, если сможет выполнить заказ."
+            if kind == "custom_order"
+            else "✅ Сообщение передано. Спасибо!"
+        )
+
+        await message.answer(
+            user_message,
+            reply_markup=MAIN_MENU,
+        )
         return
 
     if mode == "edit_wait_photo":
@@ -2835,41 +3413,96 @@ async def handle_text_flow(message: Message) -> None:
             return
 
         task_prompts = {
-            "improve": "Improve the supplied photo: enhance clarity, lighting, color balance and visible details while preserving the subject's identity and composition. User requests: ",
-            "background": "Replace only the background as requested, keeping the main subject, pose, clothes and identity as consistent as possible. New background instruction: ",
+            "improve": (
+                "Improve the supplied photo: enhance clarity, lighting, color balance "
+                "and visible details while preserving the subject's identity and composition. "
+                "User requests: "
+            ),
+            "background": (
+                "Replace only the background as requested, keeping the main subject, pose, "
+                "clothes and identity as consistent as possible. New background instruction: "
+            ),
         }
+
         edit_prompt = task_prompts.get(edit_task, "") + text
-        await begin_generation(message, edit_prompt, "edit", reference=reference)
+        await begin_generation(
+            message,
+            edit_prompt,
+            "edit",
+            reference=reference,
+        )
         return
 
     if mode == "style_input":
         style = STYLE_PRESETS.get(str(flow.get("style_key", "")))
         user_flows.pop(user_id, None)
+
         if not style:
-            await message.answer("Стиль потерялся. Выбери его ещё раз.", reply_markup=MAIN_MENU)
+            await message.answer(
+                "Стиль потерялся. Выбери его ещё раз.",
+                reply_markup=MAIN_MENU,
+            )
             return
-        await begin_generation(message, style[1] + " Subject and scene: " + text, "preset")
+
+        await begin_generation(
+            message,
+            style[1] + " Subject and scene: " + text,
+            "preset",
+        )
         return
 
     if mode == "improve_prompt":
         user_flows.pop(user_id, None)
         enhanced = enhance_prompt_text(text)
         last_enhanced_prompts[user_id] = enhanced
-        await message.answer("<b>🧠 Улучшенный промпт</b>\n\n<code>" + html.escape(enhanced) + "</code>\n\nНажми кнопку, чтобы сгенерировать изображение по этому описанию.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🎨 Сгенерировать", callback_data="use_enhanced")]]))
+
+        await message.answer(
+            "<b>🧠 Улучшенный промпт</b>\n\n"
+            "<code>" + html.escape(enhanced) + "</code>\n\n"
+            "Нажми кнопку, чтобы сгенерировать изображение по этому описанию.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🎨 Сгенерировать",
+                            callback_data="use_enhanced",
+                        )
+                    ]
+                ]
+            ),
+        )
         return
 
     if mode == "translate_prompt":
         user_flows.pop(user_id, None)
         translated = await translate_prompt_to_english(text)
-        await message.answer("<b>🌍 Английский промпт</b>\n\n<code>" + html.escape(translated[:3500]) + "</code>", reply_markup=MAIN_MENU)
+
+        await message.answer(
+            "<b>🌍 Английский промпт</b>\n\n"
+            "<code>" + html.escape(translated[:3500]) + "</code>",
+            reply_markup=MAIN_MENU,
+        )
         return
 
     if mode == "tiktok_script":
         user_flows.pop(user_id, None)
-        await message.answer(make_tiktok_script(text), reply_markup=MAIN_MENU)
+        await message.answer(
+            make_tiktok_script(text),
+            reply_markup=MAIN_MENU,
+        )
         return
 
-    if mode in {"generate", "avatar", "wallpaper", "product", "meme", "youtube_cover", "clothing", "poster", "character"}:
+    if mode in {
+        "generate",
+        "avatar",
+        "wallpaper",
+        "product",
+        "meme",
+        "youtube_cover",
+        "clothing",
+        "poster",
+        "character",
+    }:
         user_flows.pop(user_id, None)
         await begin_generation(message, text, str(mode))
         return
@@ -3004,21 +3637,22 @@ async def main() -> None:
         log.info("Starting MarketPhoto AI. Model=%s", CF_MODEL)
 
         retry_delay = 2.0
+
         while True:
             try:
-                # Keep any pending Telegram updates when a service restarts.
                 await bot.delete_webhook(drop_pending_updates=False)
                 polling_active = True
                 log.info("Telegram polling starting")
+
                 await dp.start_polling(
                     bot,
                     allowed_updates=dp.resolve_used_update_types(),
                 )
 
-                # A normal return usually means Render is shutting the service down
-                # or the dispatcher was deliberately stopped; don't create a restart loop.
                 polling_active = False
-                log.info("Telegram polling stopped normally; shutting down cleanly")
+                log.info(
+                    "Telegram polling stopped normally; shutting down cleanly"
+                )
                 break
 
             except TelegramConflictError:
@@ -3027,7 +3661,6 @@ async def main() -> None:
                     "TelegramConflictError: another process is polling this same bot token. "
                     "Stop every other local/Render instance and leave exactly one poller running."
                 )
-                # A conflict won't fix itself while a second instance is running.
                 raise
 
             except (KeyboardInterrupt, SystemExit):
@@ -3045,6 +3678,7 @@ async def main() -> None:
 
     finally:
         polling_active = False
+
         if server is not None:
             server.close()
             await server.wait_closed()
