@@ -358,9 +358,7 @@ def init_db() -> None:
                 "ALTER TABLE daily_usage ADD COLUMN free_used INTEGER NOT NULL DEFAULT 0"
             )
         if "vip_used" not in columns:
-            db.execute(
-                "ALTER TABLE daily_usage ADD COLUMN vip_used INTEGER NOT NULL DEFAULT 0"
-            )
+            db.execute("ALTER TABLE daily_usage ADD COLUMN vip_used INTEGER NOT NULL DEFAULT 0")
 
         payment_columns = {
             r[1]
@@ -826,11 +824,12 @@ def extract_image_response(response: httpx.Response) -> bytes:
 
         if 3030 in codes:
             raise UserFacingError(
-                "Cloudflare отклонил запрос проверкой безопасности (код 3030). "
-                "Этот фильтр работает на стороне Cloudflare и не отключается настройкой бота. "
-                "Попробуй безопасное, нейтральное описание сцены без жестокости "
-                "и других деталей, которые могут быть неверно истолкованы. "
-                "Лимит за неудачную генерацию возвращён."
+                "⚠️ Cloudflare отклонил запрос автоматической проверкой безопасности (код 3030). "
+                "Отключить или обойти эту проверку настройкой бота нельзя. "
+                "Если запрос безвредный, попробуй сформулировать его точнее и нейтральнее: "
+                "опиши персонажа, одежду, действие, фон и художественный стиль, "
+                "убрав двусмысленные или графические подробности. "
+                "🔄 Лимит за неудачную генерацию возвращён."
             )
 
         if 3036 in codes:
@@ -1247,62 +1246,88 @@ def save_report(
 
 
 def estimated_generation_progress(elapsed_seconds: float) -> int:
-    """A moving waiting-time estimate, not the model's internal progress."""
+    """A smoothly increasing waiting estimate; this is not the API's real progress."""
     elapsed = max(0.0, float(elapsed_seconds))
-    # Moves from 8% toward 92%; final 100% is only shown after the API returns an image.
+    # Rise gently and stop at 92%; show 100% only after the image has been received.
     return min(92, max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0)))))
 
 
 def generation_progress_text(percent: int, frame_index: int, mode: str = "generate") -> str:
+    """Render one polished frame of the animated generation status."""
     percent = max(8, min(92, int(percent)))
-    frames = [
-        ("🌌", "ЗАПУСКАЮ МАСТЕРСКУЮ", "Проверяю запрос и подготавливаю композицию"),
-        ("🧠", "СОБИРАЮ ОБРАЗ", "Модель обрабатывает описание и визуальные детали"),
-        ("🎨", "РАБОТАЮ С ЦВЕТОМ", "Формируются свет, материалы и настроение кадра"),
-        ("🪄", "ДОБАВЛЯЮ ДЕТАЛИ", "Собирается итоговая композиция"),
-        ("✨", "ФИНИШНЫЕ ШТРИХИ", "Жду готовый файл от сервиса генерации"),
-        ("🖼️", "ПОДГОТАВЛИВАЮ РЕЗУЛЬТАТ", "Проверяю файл перед отправкой в Telegram"),
+
+    # The phase follows the estimated percentage, while small decorative details animate.
+    phases = [
+        ("🚀", "ГОТОВЛЮ КОМПОЗИЦИЮ", "Подготавливаю сцену и раскладываю визуальные детали"),
+        ("🧠", "СОБИРАЮ ОБРАЗ", "Прорабатываются персонажи, формы и основные элементы"),
+        ("🎨", "РАБОТАЮ С ЦВЕТОМ", "Настраиваются свет, оттенки, материалы и атмосфера"),
+        ("🪄", "ДОБАВЛЯЮ ДЕТАЛИ", "Собираются мелкие детали и финальный вид изображения"),
+        ("✨", "ФИНИШНЫЕ ШТРИХИ", "Жду, пока сервис вернёт готовый файл"),
     ]
-    emoji, headline, subtitle = frames[frame_index % len(frames)]
-    spinner = ("◐", "◓", "◑", "◒")[frame_index % 4]
-    filled = max(1, min(18, round(percent / 100 * 18)))
-    bar = "🟦" * filled + "▫️" * (18 - filled)
+    phase_index = min(len(phases) - 1, max(0, (percent - 8) // 17))
+    emoji, headline, subtitle = phases[phase_index]
+
+    spinner_frames = ("◐", "◓", "◑", "◒")
+    sparkle_frames = ("✦ ✧ ✦", "✧ ✦ ✧", "✨ · ✨", "· ✨ ·")
+    spinner = spinner_frames[frame_index % len(spinner_frames)]
+    sparkles = sparkle_frames[frame_index % len(sparkle_frames)]
+
+    bar_length = 20
+    filled = max(1, min(bar_length, round(percent / 100 * bar_length)))
+    bar = "🟦" * filled + "▫️" * (bar_length - filled)
+
     mode_names = {
-        "generate": "Свободная генерация", "avatar": "Аватарка", "wallpaper": "Обои на телефон",
-        "edit": "Редактирование фото", "product": "Фото товара", "meme": "Мем",
-        "youtube_cover": "Обложка YouTube", "clothing": "Дизайн одежды", "poster": "Постер",
-        "character": "Дизайн персонажа", "preset": "Выбранный стиль",
+        "generate": "Свободная генерация",
+        "avatar": "Аватарка",
+        "wallpaper": "Обои на телефон",
+        "edit": "Редактирование фото",
+        "product": "Фото товара",
+        "meme": "Мем",
+        "youtube_cover": "Обложка YouTube",
+        "clothing": "Дизайн одежды",
+        "poster": "Постер",
+        "character": "Дизайн персонажа",
+        "preset": "Выбранный стиль",
     }
     mode_name = html.escape(mode_names.get(mode, "Создание изображения"))
+
     return (
-        "╭━━━━━━━━━━━━━━━━━━━━━━━━╮\n"
-        "      <b>✨ MARKETPHOTO AI</b>\n"
-        "╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
-        f"{emoji} <b>{headline}</b>\n"
+        "╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n"
+        f"   {sparkles}\n"
+        "       <b>✨ MARKETPHOTO AI ✨</b>\n"
+        "╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"{emoji} <b>{headline}</b>  {spinner}\n"
         f"<i>{html.escape(subtitle)}</i>\n\n"
-        f"{spinner} <code>{bar}</code> <b>{percent}%</b>\n"
-        f"<code>{'█' * (percent // 5)}{'░' * (20 - percent // 5)}</code>\n\n"
+        f"{bar}\n"
+        f"⚡ <b>{percent}%</b>  <i>создание изображения</i>\n\n"
         f"🎨 <b>Режим:</b> {mode_name}\n"
-        "<i>Процент — ориентировочная анимация ожидания, не реальный индикатор Cloudflare.</i>"
+        "<i>Процент приблизительный: Cloudflare не передаёт настоящий ход генерации.</i>"
     )
 
 
 async def animate_generation(status_message: Message, mode: str = "generate") -> None:
-    """Show a pleasant, non-blocking progress animation until generation finishes."""
+    """Show an animated, non-blocking status message until generation finishes."""
     started = time.monotonic()
     frame_index = 0
+
     while True:
         elapsed = time.monotonic() - started
+        progress_text = generation_progress_text(
+            estimated_generation_progress(elapsed),
+            frame_index,
+            mode,
+        )
         try:
-            await status_message.edit_text(
-                generation_progress_text(estimated_generation_progress(elapsed), frame_index, mode)
-            )
+            await status_message.edit_text(progress_text)
         except TelegramAPIError as exc:
+            # Telegram may reject an unchanged edit or apply a short rate limit.
             log.debug("Could not update generation animation: %s", exc)
         except Exception:
             log.exception("Unexpected generation animation error")
+
         frame_index += 1
         await asyncio.sleep(3.0)
+
 
 async def stop_generation_animation(
     animation_task: asyncio.Task[None] | None,
@@ -1891,12 +1916,30 @@ async def cmd_stats(message: Message) -> None:
             "SELECT COUNT(*) n FROM payments WHERE refunded=0"
         ).fetchone()["n"]
 
+        generations_n = db.execute(
+            "SELECT COUNT(*) n FROM generation_history"
+        ).fetchone()["n"]
+
+        today = today_key()
+        generations_today_n = db.execute(
+            "SELECT COUNT(*) n FROM generation_history WHERE substr(created_at, 1, 10)=?",
+            (today,),
+        ).fetchone()["n"]
+
+        active_today_n = db.execute(
+            "SELECT COUNT(DISTINCT user_id) n FROM daily_usage WHERE day=?",
+            (today,),
+        ).fetchone()["n"]
+
     await message.answer(
-        "<b>📈 Статистика</b>\n"
-        f"Пользователей: <b>{users_n}</b>\n"
-        f"Новых обращений: <b>{reports_n}</b>\n"
-        f"Не возвращённых платежей: <b>{payments_n}</b>\n"
-        f"Получено Stars: <b>{stars_n}</b> ⭐"
+        "<b>📈 Статистика MarketPhoto AI</b>\n"
+        f"👥 Всего пользователей: <b>{users_n}</b>\n"
+        f"🟢 Активных сегодня: <b>{active_today_n}</b>\n"
+        f"🎨 Успешных генераций всего: <b>{generations_n}</b>\n"
+        f"📅 Успешных генераций сегодня: <b>{generations_today_n}</b>\n"
+        f"📩 Новых обращений: <b>{reports_n}</b>\n"
+        f"💳 Не возвращённых платежей: <b>{payments_n}</b>\n"
+        f"⭐ Получено Stars: <b>{stars_n}</b>"
     )
 
 
