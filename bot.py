@@ -1519,9 +1519,19 @@ async def begin_generation(
     try:
         reservation = reserve_generation(user_id)
 
-        status_message = await message.answer(
-    generation_progress_text(8, 0, mode)
-)
+                status_message = await message.answer(
+            generation_progress_text(8, 0, mode)
+        )
+
+        animation_task = asyncio.create_task(
+            animate_generation(status_message, mode)
+        )
+
+        if bot:
+            await bot.send_chat_action(
+                message.chat.id,
+                ChatAction.UPLOAD_PHOTO,
+            )
 
 animation_task = asyncio.create_task(
     animate_generation(status_message, mode)
