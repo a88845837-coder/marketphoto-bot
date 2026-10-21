@@ -1247,42 +1247,254 @@ def save_report(
 
 
 def estimated_generation_progress(elapsed_seconds: float) -> int:
-    """A moving waiting-time estimate, not the model's internal progress."""
+    """Приблизительная оценка ожидания."""
     elapsed = max(0.0, float(elapsed_seconds))
-    # A rough waiting estimate drives the filling bar; the numeric value is not displayed.
-    return min(92, max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0))))
+    return min(
+        92,
+        max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0))))
+    )
 
 
-def generation_progress_text(percent: int, frame_index: int, mode: str = "generate") -> str:
-    """Створює кадр анімації з відсотком і шкалою, що рухаються."""
-    current_percent = min(100, max(0, int(percent)))
+def generation_progress_text(
+    percent: int,
+    frame_index: int,
+    mode: str = "generate",
+) -> str:
+    """Анимация с движущимся процентом и заполняющейся шкалой."""
+    percent = min(100, max(0, int(percent)))
     spinner = ("◴", "◷", "◶", "◵")[frame_index % 4]
 
-    if current_percent >= 100:
+    if percent >= 100:
         emoji = "⏳"
         subtitle = "Ожидайте, завершается генерация..."
         footer = "⏳ <i>Ожидайте, результат скоро появится в чате.</i>"
-    elif current_percent <= 15:
+    elif percent <= 15:
         emoji = "✨"
         subtitle = "Инициализация и разбор промпта..."
         footer = "⏳ <i>Нейросеть готовит изображение...</i>"
-    elif current_percent <= 35:
+    elif percent <= 35:
         emoji = "🧠"
         subtitle = "Построение латентного пространства..."
-        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
-    elif current_percent <= 60:
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
+    elif percent <= 60:
         emoji = "🎨"
         subtitle = "Диффузия и синтез текстур..."
-        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
-    elif current_percent <= 80:
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
+    elif percent <= 80:
         emoji = "🪄"
         subtitle = "Детализация контуров и света..."
-        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
     else:
         emoji = "💫"
         subtitle = "Финальная детализация изображения..."
-        footer = "⏳ <i>Нейросеть создает ваш шедевр...</i>"
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
 
+    width = 20
+    filled = percent * width / 100
+    full_count = int(filled)
+    remainder = filled - full_count
+
+    partial_chars = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉")
+    partial_index = min(7, int(remainder * 8))
+
+    bar = "█" * full_count
+
+    if full_count < width and partial_index:
+        bar += partial_chars[partial_index]
+
+    bar += "░" * max(0, width - len(bar))
+
+    return (
+        "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+        "       <b>✨ MARKETPHOTO AI ✨</b>\n"
+        "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"{emoji} <b>ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ</b>\n"
+        f"<i>{html.escape(subtitle)}</i>\n\n"
+        f"{spinner} <code>[{bar}]</code>  <b>{percent}%</b>\n\n"
+        f"{footer}"
+    )
+
+
+async def animate_generation(
+    status_message: Message,
+    mode: str = "generate",
+) -> None:
+    """Обновляет процент и шкалу каждую секунду."""
+    percent = 8
+    frame_index = 0
+
+    while True:
+        await asyncio.sleep(1)
+
+        if percent < 100:
+            percent += 1
+
+        try:
+            await status_message.edit_text(
+                generation_progress_text(
+                    percent,
+                    frame_index,
+                    mode,
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+        except TelegramAPIError as exc:
+            if "message is not modified" not in str(exc).lower():
+                log.debug(
+                    "Could not update generation animation: %s",
+                    exc,
+                )
+        except Exception:
+            log.exception(
+                "Unexpected generation animation error"
+            )
+
+        frame_index += 1
+
+
+async def stop_generation_animation(
+    animation_task: asyncio.Task[None] | None,
+) -> None:
+    """Останавливает анимацию после завершения генерации."""
+    if animation_task is None:
+        return
+
+    if not animation_task.done():
+        animation_task.cancel()
+
+    try:
+        await animation_task
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        log.debug(
+            "Generation animation task stopped: %s",
+            exc,
+        )def estimated_generation_progress(elapsed_seconds: float) -> int:
+    """Приблизительная оценка ожидания."""
+    elapsed = max(0.0, float(elapsed_seconds))
+    return min(
+        92,
+        max(8, int(8 + 84 * (1 - math.exp(-elapsed / 52.0))))
+    )
+
+
+def generation_progress_text(
+    percent: int,
+    frame_index: int,
+    mode: str = "generate",
+) -> str:
+    """Анимация с движущимся процентом и заполняющейся шкалой."""
+    percent = min(100, max(0, int(percent)))
+    spinner = ("◴", "◷", "◶", "◵")[frame_index % 4]
+
+    if percent >= 100:
+        emoji = "⏳"
+        subtitle = "Ожидайте, завершается генерация..."
+        footer = "⏳ <i>Ожидайте, результат скоро появится в чате.</i>"
+    elif percent <= 15:
+        emoji = "✨"
+        subtitle = "Инициализация и разбор промпта..."
+        footer = "⏳ <i>Нейросеть готовит изображение...</i>"
+    elif percent <= 35:
+        emoji = "🧠"
+        subtitle = "Построение латентного пространства..."
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
+    elif percent <= 60:
+        emoji = "🎨"
+        subtitle = "Диффузия и синтез текстур..."
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
+    elif percent <= 80:
+        emoji = "🪄"
+        subtitle = "Детализация контуров и света..."
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
+    else:
+        emoji = "💫"
+        subtitle = "Финальная детализация изображения..."
+        footer = "⏳ <i>Нейросеть создаёт ваш шедевр...</i>"
+
+    width = 20
+    filled = percent * width / 100
+    full_count = int(filled)
+    remainder = filled - full_count
+
+    partial_chars = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉")
+    partial_index = min(7, int(remainder * 8))
+
+    bar = "█" * full_count
+
+    if full_count < width and partial_index:
+        bar += partial_chars[partial_index]
+
+    bar += "░" * max(0, width - len(bar))
+
+    return (
+        "╭━━━━━━━━━━━━━━━━━━━━╮\n"
+        "       <b>✨ MARKETPHOTO AI ✨</b>\n"
+        "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"{emoji} <b>ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЯ</b>\n"
+        f"<i>{html.escape(subtitle)}</i>\n\n"
+        f"{spinner} <code>[{bar}]</code>  <b>{percent}%</b>\n\n"
+        f"{footer}"
+    )
+
+
+async def animate_generation(
+    status_message: Message,
+    mode: str = "generate",
+) -> None:
+    """Обновляет процент и шкалу каждую секунду."""
+    percent = 8
+    frame_index = 0
+
+    while True:
+        await asyncio.sleep(1)
+
+        if percent < 100:
+            percent += 1
+
+        try:
+            await status_message.edit_text(
+                generation_progress_text(
+                    percent,
+                    frame_index,
+                    mode,
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+        except TelegramAPIError as exc:
+            if "message is not modified" not in str(exc).lower():
+                log.debug(
+                    "Could not update generation animation: %s",
+                    exc,
+                )
+        except Exception:
+            log.exception(
+                "Unexpected generation animation error"
+            )
+
+        frame_index += 1
+
+
+async def stop_generation_animation(
+    animation_task: asyncio.Task[None] | None,
+) -> None:
+    """Останавливает анимацию после завершения генерации."""
+    if animation_task is None:
+        return
+
+    if not animation_task.done():
+        animation_task.cancel()
+
+    try:
+        await animation_task
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        log.debug(
+            "Generation animation task stopped: %s",
+            exc,
+        )
     # 20 позиций с частичными блоками: полоса меняется вместе с процентом.
     bar_width = 20
     filled = current_percent * bar_width / 100.0
